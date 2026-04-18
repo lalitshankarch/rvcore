@@ -234,17 +234,12 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     switch (imm_se) {
     case 0: { // ECALL
       switch (reg(17)) {
-      case 4: {
-        u32 addr = reg(10);
-        while (memory[addr]) {
-          putchar(memory[addr++]);
-        }
+      case 4:
+        printf("%s", &memory[reg(10)]);
         break;
-      }
       case 10:
         EXCEPTION("EXIT");
         break;
-
       default:
         EXCEPTION("Unknown syscall");
       }
