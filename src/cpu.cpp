@@ -8,6 +8,16 @@ void Cpu::set_reg(u32 idx, u32 val) {
 
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
 
+void Cpu::step(u8 *memory) {
+  u32 b0 = u32(memory[pc + 0]);
+  u32 b1 = u32(memory[pc + 1]) << 8;
+  u32 b2 = u32(memory[pc + 2]) << 16;
+  u32 b3 = u32(memory[pc + 3]) << 24;
+  u32 instr = b3 | b2 | b1 | b0;
+  pc += 4;
+  execute_instr(memory, instr);
+}
+
 void Cpu::execute_instr(u8 *memory, u32 instr) {
   u32 imm_se = u32(i32(instr) >> 20);
   u32 u_imm = (instr >> 12) << 12;
@@ -225,14 +235,31 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     break;
   case 0b1110011: {
     switch (imm_se) {
-    case 0:
-      EXCEPTION("ECALL");
+    case 0: { // ECALL
+      switch (reg(17)) {
+      case 4: {
+        u32 addr = reg(10);
+        while (memory[addr]) {
+          putchar(memory[addr++]);
+        }
+        break;
+      }
+      case 10:
+        EXCEPTION("EXIT");
+        break;
+
+      default:
+        EXCEPTION("Unknown syscall");
+      }
       break;
+    }
     case 1:
       EXCEPTION("EBREAK");
+      break;
     default:
       EXCEPTION("Unhandled SYSTEM");
     }
+    break;
   }
   default:
     EXCEPTION("Unhandled opcode");

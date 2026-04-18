@@ -42,8 +42,9 @@ class Cpu {
 
   void set_reg(u32 idx, u32 val);
   u32 reg(u32 idx);
+  void execute_instr(u8 *memory, u32 instr);
 
 public:
   Cpu() : regs({}), pc(0) {};
-  void execute_instr(u8 *memory, u32 instr);
+  void step(u8 *memory);
 };
