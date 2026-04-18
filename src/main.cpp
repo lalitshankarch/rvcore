@@ -1,11 +1,33 @@
-#include "types.h"
-#include <iostream>
+#include "cpu.h"
+#include "debug.h"
+#include <exception>
+#include <fstream>
+#include <vector>
 
-constexpr u8 test() { return u8(0xff); }
+int main(int argc, const char **argv) {
+  if (argc < 2) {
+    printf("Usage: %s <bin>\n", argv[0]);
+    return 1;
+  }
 
-int main() {
-  std::cout << (i32(0x80000000) >> 20) << std::endl;
-  std::cout << i32(i16(i8(test()))) << std::endl;
-  std::cout << i32(u32(i32(i8(test())))) << std::endl;
-  std::cout << i32(u32(i8(test()))) << std::endl;
+  std::ifstream file(argv[1], std::ios::binary);
+  if (!file) {
+    std::perror("ifstream");
+    return 1;
+  }
+
+  std::vector<u8> memory((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+
+  Cpu cpu;
+
+  try {
+    while (true) {
+      cpu.step(memory.data());
+    }
+  } catch (std::exception &ex) {
+    std::cerr << std::endl << RED << ex.what() << RESET << std::endl;
+  }
+
+  return 0;
 }
