@@ -8,12 +8,34 @@ void Cpu::set_reg(u32 idx, u32 val) {
 
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
 
+u16 load16_(const u8 *memory, u32 addr) {
+  u16 b0 = u16(memory[addr + 0]);
+  u16 b1 = u16(memory[addr + 1] << 8);
+  return b1 | b0;
+}
+
+u32 load32_(const u8 *memory, u32 addr) {
+  u32 b0 = u32(memory[addr + 0]);
+  u32 b1 = u32(memory[addr + 1]) << 8;
+  u32 b2 = u32(memory[addr + 2]) << 16;
+  u32 b3 = u32(memory[addr + 3]) << 24;
+  return b3 | b2 | b1 | b0;
+}
+
+void store16_(u8 *memory, u32 addr, u16 hword) {
+  memory[addr + 0] = u8(hword);
+  memory[addr + 1] = u8(hword >> 8);
+}
+
+void store32_(u8 *memory, u32 addr, u32 word) {
+  memory[addr + 0] = u8(word);
+  memory[addr + 1] = u8(word >> 8);
+  memory[addr + 2] = u8(word >> 16);
+  memory[addr + 3] = u8(word >> 24);
+}
+
 void Cpu::step(u8 *memory) {
-  u32 b0 = u32(memory[pc + 0]);
-  u32 b1 = u32(memory[pc + 1]) << 8;
-  u32 b2 = u32(memory[pc + 2]) << 16;
-  u32 b3 = u32(memory[pc + 3]) << 24;
-  u32 instr = b3 | b2 | b1 | b0;
+  u32 instr = load32_(memory, pc);
   pc += 4;
   execute_instr(memory, instr);
 }
@@ -98,29 +120,18 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     case LB:
       set_reg(rd, u32(i8(memory[addr])));
       break;
-    case LH: {
-      u32 b0 = u32(memory[addr + 0]);
-      u32 b1 = u32(memory[addr + 1]) << 8;
-      set_reg(rd, u32(i16(b1 | b0)));
+    case LH:
+      set_reg(rd, u32(i16(load16_(memory, addr))));
       break;
-    }
-    case LW: {
-      u32 b0 = u32(memory[addr + 0]);
-      u32 b1 = u32(memory[addr + 1]) << 8;
-      u32 b2 = u32(memory[addr + 2]) << 16;
-      u32 b3 = u32(memory[addr + 3]) << 24;
-      set_reg(rd, b3 | b2 | b1 | b0);
+    case LW:
+      set_reg(rd, load32_(memory, addr));
       break;
-    }
     case LBU:
       set_reg(rd, memory[addr]);
       break;
-    case LHU: {
-      u32 b0 = u32(memory[addr + 0]);
-      u32 b1 = u32(memory[addr + 1]) << 8;
-      set_reg(rd, b1 | b0);
+    case LHU:
+      set_reg(rd, load16_(memory, addr));
       break;
-    }
     default:
       EXCEPTION("Unhandled funct3");
     }
@@ -136,26 +147,12 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     case SB:
       memory[addr] = u8(reg(rs2));
       break;
-    case SH: {
-      u32 hword = reg(rs2);
-      u8 b0 = u8(hword);
-      u8 b1 = u8(hword >> 8);
-      memory[addr + 0] = b0;
-      memory[addr + 1] = b1;
+    case SH:
+      store16_(memory, addr, u16(reg(rs2)));
       break;
-    }
-    case SW: {
-      u32 word = reg(rs2);
-      u8 b0 = u8(word);
-      u8 b1 = u8(word >> 8);
-      u8 b2 = u8(word >> 16);
-      u8 b3 = u8(word >> 24);
-      memory[addr + 0] = b0;
-      memory[addr + 1] = b1;
-      memory[addr + 2] = b2;
-      memory[addr + 3] = b3;
+    case SW:
+      store32_(memory, addr, reg(rs2));
       break;
-    }
     default:
       EXCEPTION("Unhandled funct3");
     }
