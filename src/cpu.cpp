@@ -39,7 +39,8 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     break;
   }
   case 0b0000011: {
-    u32 addr = reg(rs1) + imm_se;
+    u32 offset = imm_se;
+    u32 addr = reg(rs1) + offset;
     switch (funct3) {
     case LB:
       set_reg(rd, u32(i8(memory[addr])));
@@ -65,6 +66,41 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
       u32 b0 = u32(memory[addr + 0]);
       u32 b1 = u32(memory[addr + 1]) << 8;
       set_reg(rd, b1 | b0);
+      break;
+    }
+    default:
+      EXCEPTION("Unhandled funct3");
+    }
+    break;
+  }
+  case 0b0100011: {
+    u32 off1 = (instr >> 7) & 0x1f;
+    u32 off2 = instr >> 25;
+    u32 imm = off2 << 5 | off1;
+    u32 offset = u32((i32(imm) << 20) >> 20);
+    u32 addr = reg(rs1) + offset;
+    switch (funct3) {
+    case SB:
+      memory[addr] = u8(reg(rs2));
+      break;
+    case SH: {
+      u32 hword = reg(rs2);
+      u8 b0 = u8(hword);
+      u8 b1 = u8(hword >> 8);
+      memory[addr + 0] = b0;
+      memory[addr + 1] = b1;
+      break;
+    }
+    case SW: {
+      u32 word = reg(rs2);
+      u8 b0 = u8(word);
+      u8 b1 = u8(word >> 8);
+      u8 b2 = u8(word >> 16);
+      u8 b3 = u8(word >> 24);
+      memory[addr + 0] = b0;
+      memory[addr + 1] = b1;
+      memory[addr + 2] = b2;
+      memory[addr + 3] = b3;
       break;
     }
     default:
