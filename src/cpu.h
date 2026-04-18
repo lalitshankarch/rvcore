@@ -8,6 +8,12 @@ class Cpu {
 
   enum Funct3 : u32 {
     JALR = 0b000,
+    BEQ = 0b000,
+    BNE = 0b001,
+    BLT = 0b100,
+    BGE = 0b101,
+    BLTU = 0b110,
+    BGEU = 0b111,
     LB = 0b000,
     LH = 0b001,
     LW = 0b010,
@@ -39,5 +45,5 @@ class Cpu {
 
 public:
   Cpu() : regs({}), pc(0) {};
-  void execute_instr(u8* memory, u32 instr);
+  void execute_instr(u8 *memory, u32 instr);
 };

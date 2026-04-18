@@ -38,6 +38,41 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
+  case 0b1100011: {
+    u32 imm_b = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |
+                (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
+    u32 offset = u32(i32(imm_b << 19) >> 19);
+    u32 addr = (pc - 4) + offset;
+    switch (funct3) {
+    case BEQ:
+      if (reg(rs1) == reg(rs2))
+        pc = addr;
+      break;
+    case BNE:
+      if (reg(rs1) != reg(rs2))
+        pc = addr;
+      break;
+    case BLT:
+      if (i32(reg(rs1)) < i32(reg(rs2)))
+        pc = addr;
+      break;
+    case BGE:
+      if (i32(reg(rs1)) >= i32(reg(rs2)))
+        pc = addr;
+      break;
+    case BLTU:
+      if (reg(rs1) < reg(rs2))
+        pc = addr;
+      break;
+    case BGEU:
+      if (reg(rs1) >= reg(rs2))
+        pc = addr;
+      break;
+    default:
+      EXCEPTION("Unhandled funct3");
+    }
+    break;
+  }
   case 0b0000011: {
     u32 offset = imm_se;
     u32 addr = reg(rs1) + offset;
