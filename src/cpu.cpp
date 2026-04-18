@@ -25,6 +25,14 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
   case 0b0010111: // AUIPC
     set_reg(rd, u_imm + pc - 4);
     break;
+  case 0b1101111: { // JAL
+    u32 imm = (((instr >> 31) & 0x1) << 20) | (((instr >> 12) & 0xff) << 12) |
+              (((instr >> 20) & 0x1) << 11) | (((instr >> 21) & 0x3ff) << 1);
+    u32 offset = u32(i32(imm << 11) >> 11);
+    set_reg(rd, pc);
+    pc = (pc - 4) + offset;
+    break;
+  }
   case 0b1100111: {
     switch (funct3) {
     case JALR: {
@@ -39,9 +47,9 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     break;
   }
   case 0b1100011: {
-    u32 imm_b = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |
-                (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
-    u32 offset = u32(i32(imm_b << 19) >> 19);
+    u32 imm = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |
+              (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
+    u32 offset = u32(i32(imm << 19) >> 19);
     u32 addr = (pc - 4) + offset;
     switch (funct3) {
     case BEQ:
