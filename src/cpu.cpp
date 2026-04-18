@@ -220,6 +220,20 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
+  case 0b0001111: // FENCE
+    WARN_PRINT("FENCE not implemented");
+    break;
+  case 0b1110011: {
+    switch (imm_se) {
+    case 0:
+      EXCEPTION("ECALL");
+      break;
+    case 1:
+      EXCEPTION("EBREAK");
+    default:
+      EXCEPTION("Unhandled SYSTEM");
+    }
+  }
   default:
     EXCEPTION("Unhandled opcode");
   }
