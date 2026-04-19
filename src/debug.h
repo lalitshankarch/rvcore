@@ -27,5 +27,6 @@ enum LogLevel : u32 {
   std::cerr << RED << std::format(__VA_ARGS__) << RESET << std::endl
 #else
 #define DEBUG_PRINT(...) ((void)0)
+#define WARN_PRINT(...) ((void)0)
 #define ERROR_PRINT(...) ((void)0)
 #endif

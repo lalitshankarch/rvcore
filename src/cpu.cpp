@@ -43,7 +43,7 @@ void Cpu::step(u8 *memory) {
 void Cpu::execute_instr(u8 *memory, u32 instr) {
   u32 imm_se = u32(i32(instr) >> 20);
   u32 u_imm = (instr >> 12) << 12;
-  u32 funct7 = (instr >> 30) & 1;
+  u32 funct7 = instr >> 25;
   u32 rs2 = (instr >> 20) & 0x1f;
   u32 rs1 = (instr >> 15) & 0x1f;
   u32 funct3 = (instr >> 12) & 0x7;
@@ -168,7 +168,10 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
       set_reg(rd, i32(reg(rs1)) < i32(imm_se));
       break;
     case SLLI:
-      set_reg(rd, reg(rs1) << shamt);
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) << shamt);
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     case SLTIU:
       set_reg(rd, reg(rs1) < imm_se);
@@ -177,10 +180,12 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
       set_reg(rd, reg(rs1) ^ imm_se);
       break;
     case SRXI:
-      if (funct7)
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) >> shamt); // SRLI
+      else if (funct7 == 0b0100000)
         set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRAI
       else
-        set_reg(rd, reg(rs1) >> shamt); // SRLI
+        EXCEPTION("Unhandled funct7");
       break;
     case ORI:
       set_reg(rd, reg(rs1) | imm_se);
@@ -195,34 +200,56 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     u32 shamt = reg(rs2) & 0x1f;
     switch (funct3) {
     case ADD:
-      if (funct7)
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) + reg(rs2));
+      else if (funct7 == 0b0100000)
         set_reg(rd, reg(rs1) - reg(rs2));
       else
-        set_reg(rd, reg(rs1) + reg(rs2));
-      break;
-    case SLT:
-      set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
+        EXCEPTION("Unhandled funct7");
       break;
     case SLL:
-      set_reg(rd, reg(rs1) << shamt);
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) << shamt);
+      else
+        EXCEPTION("Unhandled funct7");
+      break;
+    case SLT:
+      if (funct7 == 0b0000000)
+        set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     case SLTU:
-      set_reg(rd, reg(rs1) < reg(rs2));
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) < reg(rs2));
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     case XOR:
-      set_reg(rd, reg(rs1) ^ reg(rs2));
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) ^ reg(rs2));
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     case SRX:
-      if (funct7)
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) >> shamt); // SRL
+      else if (funct7 == 0b0100000)
         set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRA
       else
-        set_reg(rd, reg(rs1) >> shamt); // SRL
+        EXCEPTION("Unhandled funct7");
       break;
     case OR:
-      set_reg(rd, reg(rs1) | reg(rs2));
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) | reg(rs2));
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     case AND:
-      set_reg(rd, reg(rs1) & reg(rs2));
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) & reg(rs2));
+      else
+        EXCEPTION("Unhandled funct7");
       break;
     }
     break;
