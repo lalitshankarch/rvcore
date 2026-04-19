@@ -18,6 +18,7 @@ int main(int argc, const char **argv) {
 
   std::vector<u8> memory((std::istreambuf_iterator<char>(file)),
                          std::istreambuf_iterator<char>());
+  memory.resize(1024 * 1024); // 1 MiB
 
   Cpu cpu;
 
