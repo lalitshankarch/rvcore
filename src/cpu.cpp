@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "debug.h"
+#include <cstring>
 
 void Cpu::set_reg(u32 idx, u32 val) {
   regs[idx] = val;
@@ -9,29 +10,23 @@ void Cpu::set_reg(u32 idx, u32 val) {
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
 
 u16 load16_(const u8 *memory, u32 addr) {
-  u16 b0 = u16(memory[addr + 0]);
-  u16 b1 = u16(memory[addr + 1] << 8);
-  return b1 | b0;
+  u16 val;
+  std::memcpy(&val, &memory[addr], sizeof(val));
+  return val;
 }
 
 u32 load32_(const u8 *memory, u32 addr) {
-  u32 b0 = u32(memory[addr + 0]);
-  u32 b1 = u32(memory[addr + 1]) << 8;
-  u32 b2 = u32(memory[addr + 2]) << 16;
-  u32 b3 = u32(memory[addr + 3]) << 24;
-  return b3 | b2 | b1 | b0;
+  u32 val;
+  std::memcpy(&val, &memory[addr], sizeof(val));
+  return val;
 }
 
 void store16_(u8 *memory, u32 addr, u16 hword) {
-  memory[addr + 0] = u8(hword);
-  memory[addr + 1] = u8(hword >> 8);
+  std::memcpy(&memory[addr], &hword, sizeof(hword));
 }
 
 void store32_(u8 *memory, u32 addr, u32 word) {
-  memory[addr + 0] = u8(word);
-  memory[addr + 1] = u8(word >> 8);
-  memory[addr + 2] = u8(word >> 16);
-  memory[addr + 3] = u8(word >> 24);
+  std::memcpy(&memory[addr], &word, sizeof(word));
 }
 
 void Cpu::step(u8 *memory) {
