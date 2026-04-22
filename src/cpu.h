@@ -5,6 +5,7 @@
 class Cpu {
   std::array<u32, 32> regs;
   u32 pc;
+  u8 *const memory;
 
   enum Opcode : u32 {
     OP_LUI = 0b0110111,
@@ -55,9 +56,9 @@ class Cpu {
 
   void set_reg(u32 idx, u32 val);
   u32 reg(u32 idx);
-  void execute_instr(u8 *memory, u32 instr);
+  void execute_instr(u32 instr);
 
 public:
-  Cpu() : regs({}), pc(0) {};
-  void step(u8 *memory);
+  Cpu(u8 *mem) : regs({}), pc(0), memory(mem) {};
+  void step();
 };

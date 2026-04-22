@@ -20,11 +20,11 @@ int main(int argc, const char **argv) {
                          std::istreambuf_iterator<char>());
   memory.resize(1024 * 1024); // 1 MiB
 
-  Cpu cpu;
+  Cpu cpu(memory.data());
 
   try {
     while (true) {
-      cpu.step(memory.data());
+      cpu.step();
     }
   } catch (std::exception &ex) {
     std::cerr << std::endl << RED << ex.what() << RESET << std::endl;

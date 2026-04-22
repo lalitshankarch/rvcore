@@ -29,13 +29,13 @@ void store32_(u8 *memory, u32 addr, u32 word) {
   std::memcpy(&memory[addr], &word, sizeof(word));
 }
 
-void Cpu::step(u8 *memory) {
+void Cpu::step() {
   u32 instr = load32_(memory, pc);
   pc += 4;
-  execute_instr(memory, instr);
+  execute_instr(instr);
 }
 
-void Cpu::execute_instr(u8 *memory, u32 instr) {
+void Cpu::execute_instr(u32 instr) {
   u32 imm_se = u32(i32(instr) >> 20);
   u32 u_imm = (instr >> 12) << 12;
   u32 funct7 = instr >> 25;
