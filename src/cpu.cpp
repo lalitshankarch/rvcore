@@ -46,13 +46,13 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
   u32 opcode = instr & 0x7f;
 
   switch (opcode) {
-  case 0b0110111: // LUI
+  case OP_LUI:
     set_reg(rd, u_imm);
     break;
-  case 0b0010111: // AUIPC
+  case OP_AUIPC:
     set_reg(rd, u_imm + pc - 4);
     break;
-  case 0b1101111: { // JAL
+  case OP_JAL: {
     u32 imm = (((instr >> 31) & 0x1) << 20) | (((instr >> 12) & 0xff) << 12) |
               (((instr >> 20) & 0x1) << 11) | (((instr >> 21) & 0x3ff) << 1);
     u32 offset = u32(i32(imm << 11) >> 11);
@@ -60,20 +60,15 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     pc = (pc - 4) + offset;
     break;
   }
-  case 0b1100111: {
-    switch (funct3) {
-    case JALR: {
-      u32 target_addr = (imm_se + reg(rs1)) & ~u32(1);
-      set_reg(rd, pc);
-      pc = target_addr;
-      break;
-    }
-    default:
+  case OP_JALR: {
+    if (funct3 != 0)
       EXCEPTION("Unhandled funct3");
-    }
+    u32 target_addr = (imm_se + reg(rs1)) & ~u32(1);
+    set_reg(rd, pc);
+    pc = target_addr;
     break;
   }
-  case 0b1100011: {
+  case OP_BRANCH: {
     u32 imm = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |
               (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
     u32 offset = u32(i32(imm << 19) >> 19);
@@ -108,7 +103,7 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
-  case 0b0000011: {
+  case OP_LOAD: {
     u32 offset = imm_se;
     u32 addr = reg(rs1) + offset;
     switch (funct3) {
@@ -132,7 +127,7 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
-  case 0b0100011: {
+  case OP_STORE: {
     u32 off1 = (instr >> 7) & 0x1f;
     u32 off2 = instr >> 25;
     u32 imm = off2 << 5 | off1;
@@ -153,7 +148,7 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
-  case 0b0010011: {
+  case OP_IMM: {
     u32 shamt = rs2;
     switch (funct3) {
     case ADDI:
@@ -191,7 +186,7 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
-  case 0b0110011: {
+  case OP_REG: {
     u32 shamt = reg(rs2) & 0x1f;
     switch (funct3) {
     case ADD:
@@ -249,10 +244,10 @@ void Cpu::execute_instr(u8 *memory, u32 instr) {
     }
     break;
   }
-  case 0b0001111: // FENCE
+  case OP_FENCE:
     WARN_PRINT("FENCE not implemented");
     break;
-  case 0b1110011: {
+  case OP_SYSTEM: {
     switch (imm_se) {
     case 0: { // ECALL
       switch (reg(17)) {

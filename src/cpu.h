@@ -6,8 +6,21 @@ class Cpu {
   std::array<u32, 32> regs;
   u32 pc;
 
+  enum Opcode : u32 {
+    OP_LUI = 0b0110111,
+    OP_AUIPC = 0b0010111,
+    OP_JAL = 0b1101111,
+    OP_JALR = 0b1100111,
+    OP_BRANCH = 0b1100011,
+    OP_LOAD = 0b0000011,
+    OP_STORE = 0b0100011,
+    OP_IMM = 0b0010011,
+    OP_REG = 0b0110011,
+    OP_FENCE = 0b0001111,
+    OP_SYSTEM = 0b1110011,
+  };
+
   enum Funct3 : u32 {
-    JALR = 0b000,
     BEQ = 0b000,
     BNE = 0b001,
     BLT = 0b100,
