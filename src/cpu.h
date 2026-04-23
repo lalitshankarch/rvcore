@@ -1,11 +1,14 @@
 #pragma once
 #include "types.h"
 #include <array>
+#include <vector>
+
+const u32 MEM_SIZE = 1024 * 1024;
 
 class Cpu {
   std::array<u32, 32> regs;
   u32 pc;
-  u8 *const memory;
+  std::vector<u8>& memory;
 
   enum Opcode : u32 {
     OP_LUI = 0b0110111,
@@ -59,6 +62,6 @@ class Cpu {
   void execute_instr(u32 instr);
 
 public:
-  Cpu(u8 *mem) : regs({}), pc(0), memory(mem) {};
+  Cpu(std::vector<u8>& mem);
   void step();
 };

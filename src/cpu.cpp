@@ -2,6 +2,12 @@
 #include "debug.h"
 #include <cstring>
 
+Cpu::Cpu(std::vector<u8> &mem) : pc(0x4b0), memory(mem) {
+  regs = {};
+  regs[2] = MEM_SIZE;
+  memory.resize(MEM_SIZE);
+}
+
 void Cpu::set_reg(u32 idx, u32 val) {
   regs[idx] = val;
   regs[0] = 0;
@@ -9,23 +15,23 @@ void Cpu::set_reg(u32 idx, u32 val) {
 
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
 
-u16 load16_(const u8 *memory, u32 addr) {
+u16 load16_(std::vector<u8> &memory, u32 addr) {
   u16 val;
   std::memcpy(&val, &memory[addr], sizeof(val));
   return val;
 }
 
-u32 load32_(const u8 *memory, u32 addr) {
+u32 load32_(std::vector<u8> &memory, u32 addr) {
   u32 val;
   std::memcpy(&val, &memory[addr], sizeof(val));
   return val;
 }
 
-void store16_(u8 *memory, u32 addr, u16 hword) {
+void store16_(std::vector<u8> &memory, u32 addr, u16 hword) {
   std::memcpy(&memory[addr], &hword, sizeof(hword));
 }
 
-void store32_(u8 *memory, u32 addr, u32 word) {
+void store32_(std::vector<u8> &memory, u32 addr, u32 word) {
   std::memcpy(&memory[addr], &word, sizeof(word));
 }
 
