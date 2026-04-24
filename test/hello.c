@@ -1,68 +1,59 @@
 #include "stubs.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-
-void write_str(const char *s) { write(1, s, strlen(s)); }
-
-void write_int(int n) {
-  if (n < 0) {
-    write(1, "-", 1);
-    n = -n;
-  }
-  char buf[12];
-  int i = 11;
-  buf[i] = '\0';
-  if (n == 0) {
-    write(1, "0", 1);
-    return;
-  }
-  while (n > 0) {
-    buf[--i] = '0' + (n % 10);
-    n /= 10;
-  }
-  write(1, buf + i, 11 - i);
-}
-
-int fibonacci(int n) {
-  if (n <= 1)
-    return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-void bubble_sort(int *arr, int n) {
-  for (int i = 0; i < n - 1; i++) {
-    for (int j = 0; j < n - i - 1; j++) {
-      if (arr[j] > arr[j + 1]) {
-        int tmp = arr[j];
-        arr[j] = arr[j + 1];
-        arr[j + 1] = tmp;
-      }
-    }
-  }
-}
 
 void _start(void) {
-  write_str("Fibonacci:\n");
-  for (int i = 0; i < 10; i++) {
-    write_str("  fib(");
-    write_int(i);
-    write_str(") = ");
-    write_int(fibonacci(i));
-    write_str("\n");
-  }
+  // basic malloc and free
+  int *arr = malloc(10 * sizeof(int));
+  for (int i = 0; i < 10; i++)
+    arr[i] = i * i;
+  printf("Squares:\n");
+  for (int i = 0; i < 10; i++)
+    printf("  %d^2 = %d\n", i, arr[i]);
+  free(arr);
 
-  write_str("Bubble sort:\n");
-  int arr[] = {64, 34, 25, 12, 22, 11, 90};
-  int n = 7;
-  bubble_sort(arr, n);
-  write_str("  sorted: ");
-  for (int i = 0; i < n; i++) {
-    write_int(arr[i]);
-    if (i < n - 1)
-      write_str(", ");
+  // dynamic string
+  char *s = malloc(64);
+  strcpy(s, "Hello from heap!");
+  printf("%s\n", s);
+  free(s);
+
+  // linked list
+  typedef struct Node {
+    int val;
+    struct Node *next;
+  } Node;
+
+  Node *head = NULL;
+  for (int i = 5; i >= 1; i--) {
+    Node *n = malloc(sizeof(Node));
+    n->val = i;
+    n->next = head;
+    head = n;
   }
-  write_str("\n");
+  printf("Linked list: ");
+  Node *cur = head;
+  while (cur) {
+    printf("%d ", cur->val);
+    Node *tmp = cur;
+    cur = cur->next;
+    free(tmp);
+  }
+  printf("\n");
+
+  // realloc
+  int *buf = malloc(4 * sizeof(int));
+  for (int i = 0; i < 4; i++)
+    buf[i] = i;
+  buf = realloc(buf, 8 * sizeof(int));
+  for (int i = 4; i < 8; i++)
+    buf[i] = i;
+  printf("Realloc buffer: ");
+  for (int i = 0; i < 8; i++)
+    printf("%d ", buf[i]);
+  printf("\n");
+  free(buf);
 
   exit(0);
 }

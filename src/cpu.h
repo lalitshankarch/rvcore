@@ -8,6 +8,7 @@ const u32 MEM_SIZE = 1024 * 1024;
 class Cpu {
   std::array<u32, 32> regs;
   u32 pc;
+  u32 heap_ptr;
   std::vector<u8>& memory;
 
   enum Opcode : u32 {

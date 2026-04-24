@@ -1,10 +1,13 @@
 #include "cpu.h"
 #include "debug.h"
 #include <cstring>
+#include <unistd.h>
 
-Cpu::Cpu(std::vector<u8> &mem) : pc(0x4b0), memory(mem) {
+Cpu::Cpu(std::vector<u8> &mem) : pc(0x218), memory(mem) {
   regs = {};
   regs[2] = MEM_SIZE;
+  memory.resize(memory.size() + 4096);
+  heap_ptr = u32(memory.size());
   memory.resize(MEM_SIZE);
 }
 
@@ -257,9 +260,21 @@ void Cpu::execute_instr(u32 instr) {
     switch (imm_se) {
     case 0: { // ECALL
       switch (reg(17)) {
-      case 4:
-        printf("%s", &memory[reg(10)]);
+      case 0: {
+        u32 increment = reg(10);
+        u32 old_ptr = heap_ptr;
+        heap_ptr += increment;
+        set_reg(10, old_ptr);
         break;
+      }
+      case 4: {
+        int fd = int(reg(10));
+        u32 start = reg(11);
+        u32 nbytes = reg(12);
+        ssize_t bytes_written = write(fd, &memory[start], nbytes);
+        set_reg(10, u32(bytes_written));
+        break;
+      }
       case 10:
         EXCEPTION("EXIT");
         break;

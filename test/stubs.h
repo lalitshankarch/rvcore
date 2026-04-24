@@ -1,7 +1,9 @@
 #pragma once
 
-#include <unistd.h>
+#include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 int _fstat(int file, struct stat *st) {
   st->st_mode = S_IFCHR;
@@ -25,11 +27,28 @@ void _exit(int status) {
                        "ecall\n\t");
 }
 
-size_t _write(int fildes, const void *buf, size_t nbyte) {
-  __asm__ __volatile__("addi    a0, a1, 0\n\t"
+ssize_t _write(int fildes, const void *buf, ssize_t nbyte) {
+  ssize_t nbytes;
+  __asm__ __volatile__("mv      a0, %[src1]\n\t"
+                       "mv      a1, %[src2]\n\t"
+                       "mv      a2, %[src3]\n\t"
                        "li      a7, 4\n\t"
-                       "ecall\n\t");
-  return nbyte;
+                       "ecall\n\t"
+                       "mv      %[dst], a0\n\t"
+                       : [dst] "=r"(nbytes)
+                       : [src1] "r"(fildes), [src2] "r"(buf), [src3] "r"(nbyte)
+                       : "a0", "a1", "a2", "a7");
+  return nbytes;
 }
 
-void *_sbrk(intptr_t increment) { return NULL; }
+void *_sbrk(intptr_t increment) {
+  void *ptr;
+  __asm__ __volatile__("mv      a0, %[src]\n\t"
+                       "li      a7, 0\n\t"
+                       "ecall\n\t"
+                       "mv      %[dst], a0\n\t"
+                       : [dst] "=r"(ptr)
+                       : [src] "r"(increment)
+                       : "a0", "a7");
+  return ptr;
+}

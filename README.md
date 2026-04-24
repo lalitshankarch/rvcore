@@ -14,4 +14,4 @@
 
 - [ ] Run ELF binaries
 
-- [ ] Implement the rest of the `newlib` stubs (`_sbrk`, `_read`, `_fstat`, `_lseek`, etc)
+- [ ] Implement the rest of the `newlib` stubs (`_read`, `_fstat`, `_lseek`, etc)
