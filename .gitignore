@@ -7,3 +7,5 @@ notes.md
 *.s
 hello
 a.out
+riscv-tests
+riscv-gnu-toolchain

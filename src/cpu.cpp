@@ -261,9 +261,9 @@ void Cpu::execute_instr(u32 instr) {
     case 0: { // ECALL
       switch (reg(17)) {
       case 0: {
-        u32 increment = reg(10);
+        i32 increment = i32(reg(10));
         u32 old_ptr = heap_ptr;
-        heap_ptr += increment;
+        heap_ptr = u32(i32(heap_ptr) + increment);
         set_reg(10, old_ptr);
         break;
       }
