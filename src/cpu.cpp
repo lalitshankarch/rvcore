@@ -3,11 +3,10 @@
 #include <cstring>
 #include <unistd.h>
 
-Cpu::Cpu(std::vector<u8> &mem) : pc(0x218), memory(mem) {
+Cpu::Cpu(std::vector<u8> &mem) : pc(0x90), memory(mem) {
   regs = {};
   regs[2] = MEM_SIZE;
-  memory.resize(memory.size() + 4096);
-  heap_ptr = u32(memory.size());
+  heap_ptr = u32(memory.size() + 4096);
   memory.resize(MEM_SIZE);
 }
 
@@ -192,6 +191,8 @@ void Cpu::execute_instr(u32 instr) {
     case ANDI:
       set_reg(rd, reg(rs1) & imm_se);
       break;
+    default:
+      EXCEPTION("Unhandled funct3");
     }
     break;
   }
@@ -250,6 +251,8 @@ void Cpu::execute_instr(u32 instr) {
       else
         EXCEPTION("Unhandled funct7");
       break;
+    default:
+      EXCEPTION("Unhandled funct3");
     }
     break;
   }
@@ -272,7 +275,7 @@ void Cpu::execute_instr(u32 instr) {
         u32 start = reg(11);
         u32 nbytes = reg(12);
         ssize_t bytes_written = write(fd, &memory[start], nbytes);
-        set_reg(10, u32(bytes_written));
+        set_reg(10, u32(i32(bytes_written)));
         break;
       }
       case 10:

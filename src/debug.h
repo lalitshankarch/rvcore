@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include <exception>
+#include <stdexcept>
 #include <format>
 #include <iostream>
 
@@ -11,12 +11,6 @@ constexpr const char *RED = "\033[31m";
 constexpr const char *RESET = "\033[0m";
 
 #define EXCEPTION(...) throw std::runtime_error(std::format(__VA_ARGS__))
-
-enum LogLevel : u32 {
-  DEBUG,
-  WARN,
-  ERROR,
-};
 
 #ifndef NDEBUG
 #define DEBUG_PRINT(...)                                                       \

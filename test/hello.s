@@ -2,8 +2,10 @@
 .globl _start
 
 _start:
-  lui  a0, %hi(msg)
-  addi a0, a0, %lo(msg)
+  addi a0, x0, 1
+  lui  a1, %hi(msg)
+  addi a1, a0, %lo(msg)
+  addi a2, x0, 13
 
   li   a7, 4
   ecall
@@ -13,4 +15,4 @@ _start:
 
 .section .rodata
 msg:
-  .asciz "Hello world!"
+  .asciz "Hello world!\n"
