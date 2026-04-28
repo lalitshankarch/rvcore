@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "debug.h"
+#include "elf.h"
 #include <exception>
 #include <fstream>
 #include <vector>
@@ -10,18 +11,22 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
-  std::ifstream file(argv[1], std::ios::binary);
-  if (!file) {
-    std::perror("ifstream");
-    return 1;
-  }
-
-  std::vector<u8> memory((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
-
-  Cpu cpu(memory);
-
   try {
+    ExecSeg exec_seg = ExecSeg::get_info(argv[1]);
+
+    std::ifstream file(argv[1], std::ios::binary);
+    if (!file) {
+      std::perror("ifstream");
+      return 1;
+    }
+
+    std::vector<u8> memory(exec_seg.nbytes);
+
+    file.seekg(exec_seg.offset);
+    file.read(reinterpret_cast<char *>(memory.data()), exec_seg.nbytes);
+
+    Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
+
     while (true) {
       cpu.step();
     }

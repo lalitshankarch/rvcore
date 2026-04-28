@@ -3,11 +3,10 @@
 #include <cstring>
 #include <unistd.h>
 
-Cpu::Cpu(std::vector<u8> &mem) : pc(0x90), memory(mem) {
+Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start) : pc(pc_start), heap_ptr(heap_start), memory(mem) {
   regs = {};
-  regs[2] = MEM_SIZE;
-  heap_ptr = u32(memory.size() + 4096);
   memory.resize(MEM_SIZE);
+  regs[2] = MEM_SIZE; // Set stack pointer
 }
 
 void Cpu::set_reg(u32 idx, u32 val) {
@@ -17,23 +16,23 @@ void Cpu::set_reg(u32 idx, u32 val) {
 
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
 
-u16 load16_(std::vector<u8> &memory, u32 addr) {
+static u16 load16_(std::vector<u8> &memory, u32 addr) {
   u16 val;
   std::memcpy(&val, &memory[addr], sizeof(val));
   return val;
 }
 
-u32 load32_(std::vector<u8> &memory, u32 addr) {
+static u32 load32_(std::vector<u8> &memory, u32 addr) {
   u32 val;
   std::memcpy(&val, &memory[addr], sizeof(val));
   return val;
 }
 
-void store16_(std::vector<u8> &memory, u32 addr, u16 hword) {
+static void store16_(std::vector<u8> &memory, u32 addr, u16 hword) {
   std::memcpy(&memory[addr], &hword, sizeof(hword));
 }
 
-void store32_(std::vector<u8> &memory, u32 addr, u32 word) {
+static void store32_(std::vector<u8> &memory, u32 addr, u32 word) {
   std::memcpy(&memory[addr], &word, sizeof(word));
 }
 

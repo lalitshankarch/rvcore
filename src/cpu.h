@@ -7,8 +7,7 @@ const u32 MEM_SIZE = 1024 * 1024;
 
 class Cpu {
   std::array<u32, 32> regs;
-  u32 pc;
-  u32 heap_ptr;
+  u32 pc, heap_ptr;
   std::vector<u8>& memory;
 
   enum Opcode : u32 {
@@ -63,6 +62,6 @@ class Cpu {
   void execute_instr(u32 instr);
 
 public:
-  Cpu(std::vector<u8>& mem);
+  Cpu(std::vector<u8>& mem, u32 pc_start, u32 heap_start);
   void step();
 };
