@@ -1,7 +1,7 @@
 #include "elf.h"
 #include "debug.h"
-#include <cstdio>
 #include <cstring>
+#include <fstream>
 
 bool ExecSeg::validate_elf_header(u8 elf_header[0x18]) {
   u8 valid_header[0x18] = {};
@@ -34,17 +34,15 @@ static u32 read32_(const u8 *memory, u32 addr) {
 }
 
 ExecSeg ExecSeg::get_info(const char *path) {
-  u8 elf_header[64];
-  FILE *fptr = fopen(path, "rb");
-
-  if (!fptr) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file) {
     EXCEPTION("Invalid file path");
   }
 
-  fread(elf_header, sizeof(elf_header), 1, fptr);
+  u8 elf_header[64];
+  file.read(reinterpret_cast<char *>(elf_header), sizeof(elf_header));
 
   if (!validate_elf_header(elf_header)) {
-    fclose(fptr);
     EXCEPTION("Invalid executable format");
   }
 
@@ -54,8 +52,8 @@ ExecSeg ExecSeg::get_info(const char *path) {
   u32 ph_off = read32_(elf_header, PHOFF);
 
   for (u32 i = 0; i < ph_num; i++) {
-    fseek(fptr, ph_off + (0x20 * i), SEEK_SET);
-    fread(p_header, sizeof(p_header), 1, fptr);
+    file.seekg(ph_off + (0x20 * i));
+    file.read(reinterpret_cast<char *>(p_header), sizeof(p_header));
 
     if (read32_(p_header, PH_TYPE) == 0x1) {
       exec_seg.entry = read32_(elf_header, ENTRY) - read32_(p_header, PH_VADDR);
@@ -66,8 +64,6 @@ ExecSeg ExecSeg::get_info(const char *path) {
       return exec_seg;
     }
   }
-
-  fclose(fptr);
 
   EXCEPTION("No executable segment found");
 }

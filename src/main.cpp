@@ -13,14 +13,13 @@ int main(int argc, const char **argv) {
 
   try {
     ExecSeg exec_seg = ExecSeg::get_info(argv[1]);
-
+    std::vector<u8> memory(exec_seg.nmembytes);
     std::ifstream file(argv[1], std::ios::binary);
+
     if (!file) {
       std::perror("ifstream");
       return 1;
     }
-
-    std::vector<u8> memory(exec_seg.nbytes);
 
     file.seekg(exec_seg.offset);
     file.read(reinterpret_cast<char *>(memory.data()), exec_seg.nbytes);
