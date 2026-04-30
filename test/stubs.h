@@ -52,6 +52,9 @@ off_t _lseek(int fd, off_t offset, int whence) {
 }
 
 int _close(int fd) {
+  if (fd == 0 || fd == 1 || fd == 2) {
+    return 0;
+  }
   int ret;
   __asm__ __volatile__("mv      a0, %[src]\n\t"
                        "li      a7, 5\n\t"
