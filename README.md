@@ -14,4 +14,4 @@
 
 - [x] Run ELF binaries (binaries with a single `PT_LOAD` segment work)
 
-- [ ] Implement the rest of the `newlib` stubs (`_read`, `_fstat`, `_lseek`, etc)
+- [ ] Implement the rest of the `newlib` stubs (`_fstat`, `_isatty`, etc)
