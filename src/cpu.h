@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-const u32 MEM_SIZE = 1024 * 1024;
+const u32 MEM_SIZE = 1024 * 1024 * 8;
 
 class Cpu {
   std::array<u32, 32> regs;

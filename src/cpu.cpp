@@ -1,9 +1,11 @@
 #include "cpu.h"
 #include "debug.h"
 #include <cstring>
+#include <fcntl.h>
 #include <unistd.h>
 
-Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start) : pc(pc_start), heap_ptr(heap_start), memory(mem) {
+Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
+    : pc(pc_start), heap_ptr(heap_start), memory(mem) {
   regs = {};
   memory.resize(MEM_SIZE);
   regs[2] = MEM_SIZE; // Set stack pointer
@@ -262,14 +264,32 @@ void Cpu::execute_instr(u32 instr) {
     switch (imm_se) {
     case 0: { // ECALL
       switch (reg(17)) {
-      case 0: {
+      case 0: { // _sbrk
         i32 increment = i32(reg(10));
         u32 old_ptr = heap_ptr;
-        heap_ptr = u32(i32(heap_ptr) + increment);
+        u32 new_ptr = u32(i32(heap_ptr) + increment);
+        if (new_ptr >= MEM_SIZE)
+          EXCEPTION("_sbrk requested a block too big: {} bytes", increment);
+        heap_ptr = new_ptr;
         set_reg(10, old_ptr);
         break;
       }
-      case 4: {
+      case 1: { // _open
+        u32 start = reg(10);
+        int flags = int(reg(11));
+        int fd = open(reinterpret_cast<char *>(&memory[start]), flags);
+        set_reg(10, u32(fd));
+        break;
+      }
+      case 2: { // _read
+        int fd = int(reg(10));
+        u32 start = reg(11);
+        u32 nbytes = reg(12);
+        ssize_t bytes_written = read(fd, &memory[start], nbytes);
+        set_reg(10, u32(i32(bytes_written)));
+        break;
+      }
+      case 3: { // _write
         int fd = int(reg(10));
         u32 start = reg(11);
         u32 nbytes = reg(12);
@@ -277,7 +297,21 @@ void Cpu::execute_instr(u32 instr) {
         set_reg(10, u32(i32(bytes_written)));
         break;
       }
-      case 10:
+      case 4: { // _lseek
+        int fd = int(reg(10));
+        off_t start = reg(11);
+        int whence = i32(reg(12));
+        off_t offset = lseek(fd, start, whence);
+        set_reg(10, u32(offset));
+        break;
+      }
+      case 5: { // _close
+        int fd = int(reg(10));
+        int ret = close(fd);
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 10: // _exit
         EXCEPTION("EXIT");
         break;
       default:
