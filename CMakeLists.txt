@@ -31,5 +31,5 @@ target_compile_options(rvcore PRIVATE
     -Wold-style-cast
     -Wuseless-cast
     -Wzero-as-null-pointer-constant
-    -O1
+    -O2
 )
