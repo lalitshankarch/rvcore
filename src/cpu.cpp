@@ -1,4 +1,5 @@
 #include "cpu.h"
+#include "constants.h"
 #include "debug.h"
 #include <cstring>
 #include <fcntl.h>
@@ -7,7 +8,6 @@
 Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
     : pc(pc_start), heap_ptr(heap_start), memory(mem) {
   regs = {};
-  memory.resize(MEM_SIZE);
   regs[2] = MEM_SIZE; // Set stack pointer
 }
 

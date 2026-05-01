@@ -1,6 +1,8 @@
 #pragma once
 
 #include "types.h"
+#include <fstream>
+#include <vector>
 
 struct ElfHeader32 {
   u8 mag0, mag1, mag2, mag3, cls, data, version, osabi, abiversion;
@@ -15,13 +17,13 @@ struct ProgHeader32 {
 };
 
 struct ExecSeg {
-  u32 entry;
-  u32 offset;
-  u32 nbytes;
-  u32 nmembytes;
+  u32 entry, nmembytes;
 
-  static ExecSeg get_info(const char *path);
+  static ExecSeg read_into(std::vector<u8> &memory, const char *path);
 
 private:
+  u32 offset, nbytes;
+
   static bool validate_elf_header(const ElfHeader32 *elf_header);
+  static ExecSeg get_info(std::ifstream &file);
 };

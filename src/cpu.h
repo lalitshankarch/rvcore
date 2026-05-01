@@ -3,12 +3,10 @@
 #include <array>
 #include <vector>
 
-const u32 MEM_SIZE = 1024 * 1024 * 8;
-
 class Cpu {
   std::array<u32, 32> regs;
   u32 pc, heap_ptr;
-  std::vector<u8>& memory;
+  std::vector<u8> &memory;
 
   enum Opcode : u32 {
     OP_LUI = 0b0110111,
@@ -62,6 +60,6 @@ class Cpu {
   void execute_instr(u32 instr);
 
 public:
-  Cpu(std::vector<u8>& mem, u32 pc_start, u32 heap_start);
+  Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start);
   void step();
 };

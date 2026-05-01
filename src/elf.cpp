@@ -21,12 +21,7 @@ bool ExecSeg::validate_elf_header(const ElfHeader32 *elf_header) {
   return std::memcmp(elf_header, &valid_header, 0x18) == 0;
 }
 
-ExecSeg ExecSeg::get_info(const char *path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file) {
-    EXCEPTION("Invalid file path");
-  }
-
+ExecSeg ExecSeg::get_info(std::ifstream &file) {
   ElfHeader32 elf_header{};
   file.read(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
 
@@ -51,4 +46,22 @@ ExecSeg ExecSeg::get_info(const char *path) {
   }
 
   EXCEPTION("No executable segment found");
+}
+
+// rvcore expects ELF files with only one PT_LOAD segment at vaddr 0
+ExecSeg ExecSeg::read_into(std::vector<u8> &memory, const char *path) {
+  std::ifstream file;
+  file.exceptions(std::ios::failbit | std::ios::badbit);
+
+  file.open(path, std::ios::binary);
+
+  ExecSeg exec_seg = ExecSeg::get_info(file);
+
+  if (memory.size() < exec_seg.nmembytes)
+    memory.resize(exec_seg.nmembytes);
+
+  file.seekg(exec_seg.offset);
+  file.read(reinterpret_cast<char *>(memory.data()), exec_seg.nbytes);
+
+  return exec_seg;
 }
