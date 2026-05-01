@@ -32,4 +32,8 @@ target_compile_options(rvcore PRIVATE
     -Wuseless-cast
     -Wzero-as-null-pointer-constant
     -O2
+    -DNO_STDIO_REDIRECT
 )
+
+find_package(SDL3 REQUIRED)
+target_link_libraries(rvcore PRIVATE SDL3::SDL3)

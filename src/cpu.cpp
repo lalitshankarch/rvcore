@@ -3,12 +3,14 @@
 #include "debug.h"
 #include <cstring>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
-    : pc(pc_start), heap_ptr(heap_start), memory(mem) {
+    : pc(pc_start), heap_ptr(heap_start), memory(mem), should_render(false) {
   regs = {};
-  regs[2] = MEM_SIZE; // Set stack pointer
+  regs[2] = STACK_START; // Set stack pointer
 }
 
 void Cpu::set_reg(u32 idx, u32 val) {
@@ -42,6 +44,33 @@ void Cpu::step() {
   u32 instr = load32_(memory, pc);
   pc += 4;
   execute_instr(instr);
+}
+
+int translate_open_flags(int flag) {
+  int h = 0;
+
+  switch (flag & 0x3) {
+  case 0:
+    h |= O_RDONLY;
+    break;
+  case 1:
+    h |= O_WRONLY;
+    break;
+  case 2:
+    h |= O_RDWR;
+    break;
+  }
+
+  if (flag & 0x0200)
+    h |= O_CREAT;
+  if (flag & 0x0400)
+    h |= O_TRUNC;
+  if (flag & 0x0800)
+    h |= O_EXCL;
+  if (flag & 0x8)
+    h |= O_APPEND;
+
+  return h;
 }
 
 void Cpu::execute_instr(u32 instr) {
@@ -263,12 +292,13 @@ void Cpu::execute_instr(u32 instr) {
   case OP_SYSTEM: {
     switch (imm_se) {
     case 0: { // ECALL
+      // DEBUG_PRINT("ECALL {}", reg(17));
       switch (reg(17)) {
       case 0: { // _sbrk
         i32 increment = i32(reg(10));
         u32 old_ptr = heap_ptr;
         u32 new_ptr = u32(i32(heap_ptr) + increment);
-        if (new_ptr >= MEM_SIZE)
+        if (new_ptr >= reg(2))
           EXCEPTION("_sbrk requested a block too big: {} bytes", increment);
         heap_ptr = new_ptr;
         set_reg(10, old_ptr);
@@ -277,7 +307,9 @@ void Cpu::execute_instr(u32 instr) {
       case 1: { // _open
         u32 start = reg(10);
         int flags = int(reg(11));
-        int fd = open(reinterpret_cast<char *>(&memory[start]), flags);
+        mode_t mode = reg(12);
+        int fd = open(reinterpret_cast<char *>(&memory[start]),
+                      translate_open_flags(flags), mode);
         set_reg(10, u32(fd));
         break;
       }
@@ -311,7 +343,52 @@ void Cpu::execute_instr(u32 instr) {
         set_reg(10, u32(ret));
         break;
       }
-      case 10: // _exit
+      case 6: { // _gettimeofday
+        struct timeval time;
+        int ret = gettimeofday(&time, NULL);
+        set_reg(10, u32(time.tv_sec));
+        set_reg(11, u32(time.tv_usec));
+        set_reg(12, u32(ret));
+        break;
+      }
+      case 7: { // _usleep
+        u32 usec = reg(10);
+        int ret = usleep(usec);
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 8: { // _render_frame
+        should_render = true;
+        break;
+      }
+      case 9: { // _link
+        u32 oldpath = reg(10);
+        u32 newpath = reg(11);
+        int ret = link(reinterpret_cast<char *>(&memory[oldpath]),
+                       reinterpret_cast<char *>(&memory[newpath]));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 10: { // _unlink
+        u32 path = reg(10);
+        int ret = unlink(reinterpret_cast<char *>(&memory[path]));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 11: { // mkdir
+        u32 path = reg(10);
+        u32 mode = reg(11);
+        int ret = mkdir(reinterpret_cast<char *>(&memory[path]), mode);
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 12: { // _rmdir
+        u32 path = reg(10);
+        int ret = rmdir(reinterpret_cast<char *>(&memory[path]));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 15: // _exit
         EXCEPTION("EXIT");
         break;
       default:

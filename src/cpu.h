@@ -60,6 +60,7 @@ class Cpu {
   void execute_instr(u32 instr);
 
 public:
+  bool should_render;
   Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start);
   void step();
 };
