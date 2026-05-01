@@ -2,7 +2,7 @@
 
 `rvcore` is a single-core RISC-V emulator that implements the RV32I ISA, except for the `FENCE` and `EBREAK` instructions, which are currently `NOP`.
 
-## Test output
+## Output
 
 ![Output](image.png)
 
@@ -14,4 +14,10 @@
 
 - [x] Run ELF binaries (binaries with a single `PT_LOAD` segment work)
 
-- [ ] Implement the rest of the `newlib` stubs (`_fstat`, `_isatty`, etc)
+- [x] Implement the `newlib` stubs needed to run DOOM
+
+- [x] Get DOOM to boot
+
+- [ ] Make DOOM playable
+
+- [ ] Implement the M extension
