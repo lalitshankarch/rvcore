@@ -49,6 +49,7 @@ off_t _lseek(int fd, off_t offset, int whence) {
                        : [dst] "=r"(new_offset)
                        : [src1] "r"(fd), [src2] "r"(offset), [src3] "r"(whence)
                        : "a0", "a1", "a2", "a7");
+  return new_offset;
 }
 
 int _close(int fd) {
