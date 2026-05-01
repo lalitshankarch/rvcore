@@ -41,7 +41,7 @@ ExecSeg ExecSeg::get_info(const char *path) {
 
     if (prog_header.type == 0x1) {
       ExecSeg exec_seg{};
-      exec_seg.entry = elf_header.entry - prog_header.vaddr;
+      exec_seg.entry = elf_header.entry;
       exec_seg.offset = prog_header.offset;
       exec_seg.nbytes = prog_header.filesz;
       exec_seg.nmembytes = prog_header.memsz;
