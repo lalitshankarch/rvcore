@@ -1,6 +1,6 @@
-# rvcore: RV32I emulator
+# rvcore: RV32IM emulator
 
-`rvcore` is a single-core RISC-V emulator that implements the RV32I ISA, except for the `FENCE` and `EBREAK` instructions, which are currently `NOP`.
+`rvcore` is a single-core RISC-V emulator that implements the RV32IM ISA, except for the `FENCE` and `EBREAK` instructions, which are currently `NOP`.
 
 ## Output
 
@@ -20,4 +20,4 @@
 
 - [x] Make DOOM playable
 
-- [ ] Implement the M extension
+- [x] Implement the M extension

@@ -1,6 +1,9 @@
 #include "cpu.h"
 #include "constants.h"
 #include "debug.h"
+#include <climits>
+#include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -232,6 +235,8 @@ void Cpu::execute_instr(u32 instr) {
     case ADD:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) + reg(rs2));
+      else if (funct7 == 0b0000001) // MUL
+        set_reg(rd, reg(rs1) * reg(rs2));
       else if (funct7 == 0b0100000)
         set_reg(rd, reg(rs1) - reg(rs2));
       else
@@ -240,31 +245,53 @@ void Cpu::execute_instr(u32 instr) {
     case SLL:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) << shamt);
+      else if (funct7 == 0b0000001) // MULH
+        set_reg(rd, u32((i64(i32(reg(rs1))) * i64(i32(reg(rs2)))) >> 32));
       else
         EXCEPTION("Unhandled funct7");
       break;
     case SLT:
       if (funct7 == 0b0000000)
         set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
+      else if (funct7 == 0b0000001) // MULHSU
+        set_reg(rd, u32((i64(i32(reg(rs1))) * u64(reg(rs2))) >> 32));
       else
         EXCEPTION("Unhandled funct7");
       break;
     case SLTU:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) < reg(rs2));
+      else if (funct7 == 0b0000001) // MULHU
+        set_reg(rd, u32((u64(reg(rs1)) * u64(reg(rs2))) >> 32));
       else
         EXCEPTION("Unhandled funct7");
       break;
     case XOR:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) ^ reg(rs2));
-      else
+      else if (funct7 == 0b0000001) { // DIV
+        i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
+        if (divisor == 0) {
+          set_reg(rd, 0xffffffff);
+        } else if (dividend == INT32_MIN && divisor == -1) {
+          set_reg(rd, 0x80000000);
+        } else {
+          set_reg(rd, u32(dividend / divisor));
+        }
+      } else
         EXCEPTION("Unhandled funct7");
       break;
     case SRX:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) >> shamt); // SRL
-      else if (funct7 == 0b0100000)
+      else if (funct7 == 0b0000001) {   // DIVU
+        u32 divisor = reg(rs2), dividend = reg(rs1);
+        if (divisor == 0) {
+          set_reg(rd, 0xffffffff);
+        } else {
+          set_reg(rd, dividend / divisor);
+        }
+      } else if (funct7 == 0b0100000)
         set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRA
       else
         EXCEPTION("Unhandled funct7");
@@ -272,13 +299,29 @@ void Cpu::execute_instr(u32 instr) {
     case OR:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) | reg(rs2));
-      else
+      else if (funct7 == 0b0000001) { // REM
+        i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
+        if (divisor == 0) {
+          set_reg(rd, u32(dividend));
+        } else if (dividend == INT32_MIN && divisor == -1) {
+          set_reg(rd, 0);
+        } else {
+          set_reg(rd, u32(dividend % divisor));
+        }
+      } else
         EXCEPTION("Unhandled funct7");
       break;
     case AND:
       if (funct7 == 0b0000000)
         set_reg(rd, reg(rs1) & reg(rs2));
-      else
+      else if (funct7 == 0b0000001) { // REMU
+        u32 divisor = reg(rs2), dividend = reg(rs1);
+        if (divisor == 0) {
+          set_reg(rd, dividend);
+        } else {
+          set_reg(rd, dividend % divisor);
+        }
+      } else
         EXCEPTION("Unhandled funct7");
       break;
     default:
