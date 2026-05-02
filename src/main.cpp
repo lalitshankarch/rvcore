@@ -30,7 +30,7 @@ int main(int argc, const char **argv) {
     }
 
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
-                                SDL_TEXTUREACCESS_TARGET, WINDOW_WIDTH,
+                                SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH,
                                 WINDOW_HEIGHT);
 
     std::vector<u8> memory;
