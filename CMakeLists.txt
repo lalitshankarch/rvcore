@@ -31,7 +31,8 @@ target_compile_options(rvcore PRIVATE
     -Wold-style-cast
     -Wuseless-cast
     -Wzero-as-null-pointer-constant
-    -O2
+    -O3
+    -flto=auto
     -DNO_STDIO_REDIRECT
 )
 
