@@ -64,7 +64,7 @@ int main(int argc, const char **argv) {
           break;
       }
 
-      void *pixels = reinterpret_cast<void *>(&memory[exec_seg.nmembytes]);
+      void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
       SDL_UpdateTexture(texture, NULL, pixels, WINDOW_WIDTH * sizeof(uint32_t));
       SDL_RenderClear(renderer);
       SDL_RenderTexture(renderer, texture, NULL, NULL);
