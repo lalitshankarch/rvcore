@@ -1,6 +1,7 @@
 #include "cpu.h"
 #include "constants.h"
 #include "debug.h"
+#include <SDL3/SDL_timer.h>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -396,8 +397,8 @@ void Cpu::execute_instr(u32 instr) {
       }
       case 7: { // _usleep
         u32 usec = reg(10);
-        int ret = usleep(usec);
-        set_reg(10, u32(ret));
+        SDL_Delay(usec / 1000);
+        set_reg(10, 0);
         break;
       }
       case 8: { // _render_frame
