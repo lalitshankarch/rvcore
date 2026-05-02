@@ -18,6 +18,6 @@
 
 - [x] Get DOOM to boot
 
-- [ ] Make DOOM playable
+- [x] Make DOOM playable
 
 - [ ] Implement the M extension

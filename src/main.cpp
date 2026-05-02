@@ -2,8 +2,8 @@
 #include "cpu.h"
 #include "debug.h"
 #include "elf.h"
+#include "keymapper.h"
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_render.h>
 #include <exception>
 #include <vector>
 
@@ -13,27 +13,20 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
-  SDL_Window *window;
-  SDL_Renderer *renderer;
-  SDL_Texture *texture;
+  SDL_Window *window = nullptr;
+  SDL_Renderer *renderer = nullptr;
+  SDL_Texture *texture = nullptr;
 
   try {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
       EXCEPTION("Failed to initialize SDL");
     }
 
-    window = SDL_CreateWindow("rvdoom", WINDOW_WIDTH, WINDOW_HEIGHT,
-                              SDL_WINDOW_INPUT_FOCUS);
-    if (!window) {
+    if (!SDL_CreateWindowAndRenderer("rvdoom", WINDOW_WIDTH, WINDOW_HEIGHT,
+                                     SDL_WINDOW_INPUT_FOCUS, &window,
+                                     &renderer)) {
       SDL_Quit();
-      EXCEPTION("Failed to create window");
-    }
-
-    renderer = SDL_CreateRenderer(window, NULL);
-    if (!renderer) {
-      SDL_DestroyWindow(window);
-      SDL_Quit();
-      EXCEPTION("Failed to create renderer");
+      EXCEPTION("Failed to create window and renderer");
     }
 
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
@@ -48,10 +41,21 @@ int main(int argc, const char **argv) {
     Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
 
     while (true) {
+      u16 *queue = reinterpret_cast<u16 *>(
+          reinterpret_cast<void *>(&memory[QUEUE_START]));
       SDL_Event event;
       while (SDL_PollEvent(&event)) {
         if (event.type == SDL_EVENT_QUIT)
           return 0;
+        if (event.type == SDL_EVENT_KEY_DOWN ||
+            event.type == SDL_EVENT_KEY_UP) {
+          u16 key = convertKey(event.key.key);
+          u16 keyData =
+              u16((((event.type == SDL_EVENT_KEY_DOWN) ? 1 : 0) << 8) | key);
+          queue[memory[QUEUE_WRITE_IDX]] = keyData;
+          memory[QUEUE_WRITE_IDX]++;
+          memory[QUEUE_WRITE_IDX] %= 16;
+        }
       }
 
       while (true) {
@@ -60,7 +64,7 @@ int main(int argc, const char **argv) {
           break;
       }
 
-      void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
+      void *pixels = reinterpret_cast<void *>(&memory[exec_seg.nmembytes]);
       SDL_UpdateTexture(texture, NULL, pixels, WINDOW_WIDTH * sizeof(uint32_t));
       SDL_RenderClear(renderer);
       SDL_RenderTexture(renderer, texture, NULL, NULL);
@@ -72,6 +76,10 @@ int main(int argc, const char **argv) {
   } catch (std::exception &ex) {
     std::cerr << std::endl << RED << ex.what() << RESET << std::endl;
   }
+
+  SDL_DestroyTexture(texture);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
 
   return 0;
 }
