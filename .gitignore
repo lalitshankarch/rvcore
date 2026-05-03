@@ -4,7 +4,6 @@ notes.md
 *.o
 *.bin
 *.elf
-*.s
 hello
 a.out
 riscv-tests
