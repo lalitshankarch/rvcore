@@ -11,45 +11,61 @@ int _fstat(int file, struct stat *st) {
   return 0;
 }
 
+#define SYSCALL1(num, a0_, ret)                                                \
+  __asm__ __volatile__("mv a0, %[a0]\n\t"                                      \
+                       "mv a7, %[num]\n\t"                                     \
+                       "ecall\n\t"                                             \
+                       "mv %[dst], a0\n\t"                                     \
+                       : [dst] "=r"(ret)                                       \
+                       : [a0] "r"(a0_), [num] "r"(num)                         \
+                       : "a0", "a7")
+
+#define SYSCALL2(num, a0_, a1_, ret)                                           \
+  __asm__ __volatile__("mv a0, %[a0]\n\t"                                      \
+                       "mv a1, %[a1]\n\t"                                      \
+                       "mv a7, %[num]\n\t"                                     \
+                       "ecall\n\t"                                             \
+                       "mv %[dst], a0\n\t"                                     \
+                       : [dst] "=r"(ret)                                       \
+                       : [a0] "r"(a0_), [a1] "r"(a1_), [num] "r"(num)          \
+                       : "a0", "a1", "a7")
+
+#define SYSCALL3(num, a0_, a1_, a2_, ret)                                      \
+  __asm__ __volatile__(                                                        \
+      "mv a0, %[a0]\n\t"                                                       \
+      "mv a1, %[a1]\n\t"                                                       \
+      "mv a2, %[a2]\n\t"                                                       \
+      "mv a7, %[num]\n\t"                                                      \
+      "ecall\n\t"                                                              \
+      "mv %[dst], a0\n\t"                                                      \
+      : [dst] "=r"(ret)                                                        \
+      : [a0] "r"(a0_), [a1] "r"(a1_), [a2] "r"(a2_), [num] "r"(num)            \
+      : "a0", "a1", "a2", "a7")
+
 int _open(const char *path, int flags, mode_t mode) {
-  int fd;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "mv      a2, %[src3]\n\t"
-                       "li      a7, 1\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(fd)
-                       : [src1] "r"(path), [src2] "r"(flags), [src3] "r"(mode)
-                       : "a0", "a1", "a2", "a7");
+  int num = 1, fd;
+  SYSCALL3(num, path, flags, mode, fd);
   return fd;
 }
 
 ssize_t _read(int fd, void *buf, size_t count) {
+  int num = 2;
   ssize_t nbytes;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "mv      a2, %[src3]\n\t"
-                       "li      a7, 2\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(nbytes)
-                       : [src1] "r"(fd), [src2] "r"(buf), [src3] "r"(count)
-                       : "a0", "a1", "a2", "a7");
+  SYSCALL3(num, fd, buf, count, nbytes);
+  return nbytes;
+}
+
+ssize_t _write(int fildes, const void *buf, ssize_t nbyte) {
+  int num = 3;
+  ssize_t nbytes;
+  SYSCALL3(num, fildes, buf, nbyte, nbytes);
   return nbytes;
 }
 
 off_t _lseek(int fd, off_t offset, int whence) {
+  int num = 4;
   off_t new_offset;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "mv      a2, %[src3]\n\t"
-                       "li      a7, 4\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(new_offset)
-                       : [src1] "r"(fd), [src2] "r"(offset), [src3] "r"(whence)
-                       : "a0", "a1", "a2", "a7");
+  SYSCALL3(num, fd, offset, whence, new_offset);
   return new_offset;
 }
 
@@ -57,14 +73,9 @@ int _close(int fd) {
   if (fd == 0 || fd == 1 || fd == 2) {
     return 0;
   }
+  int num = 5;
   int ret;
-  __asm__ __volatile__("mv      a0, %[src]\n\t"
-                       "li      a7, 5\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src] "r"(fd)
-                       : "a0", "a7");
+  SYSCALL1(num, fd, ret);
   return ret;
 }
 
@@ -79,29 +90,10 @@ void _exit(int status) {
                        "ecall\n\t");
 }
 
-ssize_t _write(int fildes, const void *buf, ssize_t nbyte) {
-  ssize_t nbytes;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "mv      a2, %[src3]\n\t"
-                       "li      a7, 3\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(nbytes)
-                       : [src1] "r"(fildes), [src2] "r"(buf), [src3] "r"(nbyte)
-                       : "a0", "a1", "a2", "a7");
-  return nbytes;
-}
-
 void *_sbrk(intptr_t increment) {
+  int num = 0;
   void *ptr;
-  __asm__ __volatile__("mv      a0, %[src]\n\t"
-                       "li      a7, 0\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ptr)
-                       : [src] "r"(increment)
-                       : "a0", "a7");
+  SYSCALL1(num, increment, ptr);
   return ptr;
 }
 
@@ -120,16 +112,8 @@ int _gettimeofday(struct timeval *tv) {
 }
 
 int _usleep(useconds_t usec) {
-  int ret;
-
-  __asm__ __volatile__("mv      a0, %[src]\n\t"
-                       "li      a7, 7\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src] "r"(usec)
-                       : "a0", "a7");
-
+  int num = 7, ret;
+  SYSCALL1(num, usec, ret);
   return ret;
 }
 
@@ -141,51 +125,25 @@ void _render_frame() {
 }
 
 int _link(const char *oldpath, const char *newpath) {
-  int ret;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "li      a7, 9\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src1] "r"(oldpath), [src2] "r"(newpath)
-                       : "a0", "a1", "a7");
+  int num = 9, ret;
+  SYSCALL2(num, oldpath, newpath, ret);
   return ret;
 }
 
 int _unlink(const char *path) {
-  int ret;
-  __asm__ __volatile__("mv      a0, %[src]\n\t"
-                       "li      a7, 10\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src] "r"(path)
-                       : "a0", "a7");
+  int num = 10, ret;
+  SYSCALL1(num, path, ret);
   return ret;
 }
 
 int mkdir(const char *path, mode_t mode) {
-  int ret;
-  __asm__ __volatile__("mv      a0, %[src1]\n\t"
-                       "mv      a1, %[src2]\n\t"
-                       "li      a7, 11\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src1] "r"(path), [src2] "r"(mode)
-                       : "a0", "a1", "a7");
+  int num = 11, ret;
+  SYSCALL2(num, path, mode, ret);
   return ret;
 }
 
 int rmdir(const char *path) {
-  int ret;
-  __asm__ __volatile__("mv      a0, %[src]\n\t"
-                       "li      a7, 12\n\t"
-                       "ecall\n\t"
-                       "mv      %[dst], a0\n\t"
-                       : [dst] "=r"(ret)
-                       : [src] "r"(path)
-                       : "a0", "a7");
+  int num = 12, ret;
+  SYSCALL1(num, path, ret);
   return ret;
 }
