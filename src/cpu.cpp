@@ -2,8 +2,6 @@
 #include "constants.h"
 #include "debug.h"
 #include <SDL3/SDL_timer.h>
-#include <climits>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
@@ -18,8 +16,8 @@ Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
 }
 
 void Cpu::set_reg(u32 idx, u32 val) {
-  regs[idx] = val;
-  regs[0] = 0;
+  if (idx != 0)
+    regs[idx] = val;
 }
 
 u32 Cpu::reg(u32 idx) { return regs[idx]; }
@@ -50,7 +48,7 @@ void Cpu::step() {
   execute_instr(instr);
 }
 
-int translate_open_flags(int flag) {
+static int translate_open_flags(int flag) {
   int h = 0;
 
   switch (flag & 0x3) {
