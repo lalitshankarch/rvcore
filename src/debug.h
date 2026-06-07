@@ -1,9 +1,9 @@
 #pragma once
 
 #include "types.h"
-#include <stdexcept>
 #include <format>
 #include <iostream>
+#include <stdexcept>
 
 constexpr const char *WHITE = "\033[37m";
 constexpr const char *YELLOW = "\033[33m";

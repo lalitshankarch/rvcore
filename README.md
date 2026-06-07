@@ -11,8 +11,8 @@
 
 ## Build instructions
 
-1. To build, CMake and a compiler that supports C++20 is required (for Windows, [Cygwin](https://www.cygwin.com/) is required)
-2. Dependencies: `libsdl3-dev` / `sdl3-devel`
+1. To build, CMake and GCC/Clang is required (for Windows, [MSYS2](https://www.msys2.org/) with `mingw-w64-ucrt-x86_64-toolchain` or [Cygwin](https://www.cygwin.com/) is needed)
+2. Dependencies (SDL3): `libsdl3-dev` / `sdl3-devel` / `sdl3`
 3. Run
 
     ```

@@ -1,5 +1,5 @@
-#include "cpu.h"
 #include "constants.h"
+#include "cpu.h"
 #include "debug.h"
 #include <SDL3/SDL_timer.h>
 #include <cstdint>
@@ -8,6 +8,10 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#include <windows.h>
+#endif
 
 Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
     : pc(pc_start), heap_ptr(heap_start), memory(mem), should_render(false) {
@@ -40,6 +44,10 @@ static void store16_(std::vector<u8> &memory, u32 addr, u16 hword) {
 
 static void store32_(std::vector<u8> &memory, u32 addr, u32 word) {
   std::memcpy(&memory[addr], &word, sizeof(word));
+}
+
+static const char *host_char_ptr(std::vector<u8> &memory, u32 addr) {
+  return reinterpret_cast<const char *>(&memory[addr]);
 }
 
 void Cpu::step() {
@@ -348,10 +356,12 @@ void Cpu::execute_instr(u32 instr) {
       }
       case 1: { // _open
         u32 start = reg(10);
-        int flags = int(reg(11));
-        mode_t mode = reg(12);
-        int fd = open(reinterpret_cast<char *>(&memory[start]),
-                      translate_open_flags(flags), mode);
+        int flags = translate_open_flags(int(reg(11)));
+        mode_t mode = mode_t(reg(12));
+#if defined(_WIN32) && !defined(__CYGWIN__)
+        flags |= O_BINARY;
+#endif
+        int fd = open(host_char_ptr(memory, start), flags, mode);
         set_reg(10, u32(fd));
         break;
       }
@@ -373,7 +383,7 @@ void Cpu::execute_instr(u32 instr) {
       }
       case 4: { // _lseek
         int fd = int(reg(10));
-        off_t start = reg(11);
+        off_t start = off_t(reg(11));
         int whence = i32(reg(12));
         off_t offset = lseek(fd, start, whence);
         set_reg(10, u32(offset));
@@ -406,27 +416,37 @@ void Cpu::execute_instr(u32 instr) {
       case 9: { // _link
         u32 oldpath = reg(10);
         u32 newpath = reg(11);
-        int ret = link(reinterpret_cast<char *>(&memory[oldpath]),
-                       reinterpret_cast<char *>(&memory[newpath]));
+#if defined(_WIN32) && !defined(__CYGWIN__)
+        BOOL res = CreateHardLinkA(host_char_ptr(memory, newpath),
+                                   host_char_ptr(memory, oldpath), nullptr);
+        int ret = (res == TRUE) ? 0 : -1;
+#else
+        int ret = link(host_char_ptr(memory, oldpath),
+                       host_char_ptr(memory, newpath));
+#endif
         set_reg(10, u32(ret));
         break;
       }
       case 10: { // _unlink
         u32 path = reg(10);
-        int ret = unlink(reinterpret_cast<char *>(&memory[path]));
+        int ret = unlink(host_char_ptr(memory, path));
         set_reg(10, u32(ret));
         break;
       }
       case 11: { // mkdir
         u32 path = reg(10);
+#if defined(_WIN32) && !defined(__CYGWIN__)
+        int ret = mkdir(host_char_ptr(memory, path));
+#else
         u32 mode = reg(11);
-        int ret = mkdir(reinterpret_cast<char *>(&memory[path]), mode);
+        int ret = mkdir(host_char_ptr(memory, path), mode);
+#endif
         set_reg(10, u32(ret));
         break;
       }
       case 12: { // _rmdir
         u32 path = reg(10);
-        int ret = rmdir(reinterpret_cast<char *>(&memory[path]));
+        int ret = rmdir(host_char_ptr(memory, path));
         set_reg(10, u32(ret));
         break;
       }

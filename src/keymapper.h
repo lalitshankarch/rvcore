@@ -4,7 +4,7 @@
 #include <SDL3/SDL_keycode.h>
 #include <cctype>
 
-u16 convertKey(u32 key) {
+static u16 convertKey(u32 key) {
   switch (key) {
   case SDLK_RETURN:
     return 0x01;

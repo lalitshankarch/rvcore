@@ -1,5 +1,5 @@
-#include "elf.h"
 #include "debug.h"
+#include "elf.h"
 #include <cstring>
 #include <fstream>
 
