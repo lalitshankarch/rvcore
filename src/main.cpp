@@ -65,9 +65,9 @@ int main(int argc, const char **argv) {
       }
 
       void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
-      SDL_UpdateTexture(texture, NULL, pixels, WINDOW_WIDTH * sizeof(uint32_t));
+      SDL_UpdateTexture(texture, nullptr, pixels, WINDOW_WIDTH * sizeof(uint32_t));
       SDL_RenderClear(renderer);
-      SDL_RenderTexture(renderer, texture, NULL, NULL);
+      SDL_RenderTexture(renderer, texture, nullptr, nullptr);
       SDL_RenderPresent(renderer);
 
       cpu.should_render = false;

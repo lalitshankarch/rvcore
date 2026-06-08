@@ -8,8 +8,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(rvcore ${SOURCES})
+
+find_package(SDL3 REQUIRED)
+target_link_libraries(rvcore PRIVATE SDL3::SDL3)
 
 target_compile_options(rvcore PRIVATE
     -Wall
@@ -18,23 +21,26 @@ target_compile_options(rvcore PRIVATE
     -Wshadow
     -Wformat=2
     -Wcast-qual
-    -Wcast-align=strict
+    -Wcast-align
     -Wundef
     -Wconversion
     -Wsign-conversion
     -Wswitch-enum
-    -Wimplicit-fallthrough=5
+    -Wimplicit-fallthrough
     -Wnull-dereference
     -Wdouble-promotion
     -Wnon-virtual-dtor
     -Woverloaded-virtual
     -Wold-style-cast
-    -Wuseless-cast
     -Wzero-as-null-pointer-constant
-    -O3
-    -flto=auto
-    -DNO_STDIO_REDIRECT
 )
 
-find_package(SDL3 REQUIRED)
-target_link_libraries(rvcore PRIVATE SDL3::SDL3)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(rvcore PRIVATE -O3)
+endif()
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported)
+if(ipo_supported)
+    set_property(TARGET rvcore PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()

@@ -397,7 +397,7 @@ void Cpu::execute_instr(u32 instr) {
       }
       case 6: { // _gettimeofday
         struct timeval time;
-        int ret = gettimeofday(&time, NULL);
+        int ret = gettimeofday(&time, nullptr);
         set_reg(10, u32(time.tv_sec));
         set_reg(11, u32(time.tv_usec));
         set_reg(12, u32(ret));
