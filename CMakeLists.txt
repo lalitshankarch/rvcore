@@ -17,7 +17,6 @@ target_link_libraries(rvcore PRIVATE SDL3::SDL3)
 target_compile_options(rvcore PRIVATE
     -Wall
     -Wextra
-    -Wpedantic
     -Wshadow
     -Wformat=2
     -Wcast-qual

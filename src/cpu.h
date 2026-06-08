@@ -6,7 +6,7 @@
 
 class Cpu {
   std::array<u32, 32> regs;
-  u32 pc, heap_ptr;
+  u32 pc, instr, heap_ptr;
   std::vector<u8> &memory;
 
   enum Opcode : u32 {
@@ -58,7 +58,7 @@ class Cpu {
 
   void set_reg(u32 idx, u32 val);
   u32 reg(u32 idx);
-  void execute_instr(u32 instr);
+  void execute_instr(u32 opcode);
 
 public:
   bool should_render;

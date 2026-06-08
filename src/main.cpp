@@ -40,13 +40,16 @@ int main(int argc, const char **argv) {
 
     Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
 
-    while (true) {
+    bool quit = false;
+    while (!quit) {
       u16 *queue = reinterpret_cast<u16 *>(
           reinterpret_cast<void *>(&memory[QUEUE_START]));
       SDL_Event event;
       while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT)
-          return 0;
+        if (event.type == SDL_EVENT_QUIT) {
+          quit = true;
+          continue;
+        }
         if (event.type == SDL_EVENT_KEY_DOWN ||
             event.type == SDL_EVENT_KEY_UP) {
           u16 key = convertKey(event.key.key);
@@ -58,14 +61,13 @@ int main(int argc, const char **argv) {
         }
       }
 
-      while (true) {
+      while (!cpu.should_render) {
         cpu.step();
-        if (cpu.should_render)
-          break;
       }
 
       void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
-      SDL_UpdateTexture(texture, nullptr, pixels, WINDOW_WIDTH * sizeof(uint32_t));
+      SDL_UpdateTexture(texture, nullptr, pixels,
+                        WINDOW_WIDTH * sizeof(uint32_t));
       SDL_RenderClear(renderer);
       SDL_RenderTexture(renderer, texture, nullptr, nullptr);
       SDL_RenderPresent(renderer);
