@@ -1,5 +1,5 @@
-#include "constants.h"
 #include "cpu.h"
+#include "constants.h"
 #include "debug.h"
 #include <SDL3/SDL_timer.h>
 #include <cstdint>
@@ -405,7 +405,7 @@ slt: {
   if (funct7 == 0b0000000)
     set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
   else if (funct7 == 0b0000001) // MULHSU
-    set_reg(rd, u32((u64(i32(reg(rs1))) * u64(rs2)) >> 32));
+    set_reg(rd, u32((i64(i32(reg(rs1))) * i64(u64(reg(rs2)))) >> 32));
   else
     EXCEPTION("Unhandled funct7");
   NEXT;
