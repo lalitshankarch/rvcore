@@ -58,10 +58,9 @@ class Cpu {
 
   void set_reg(u32 idx, u32 val);
   u32 reg(u32 idx);
-  void execute_instr(u32 opcode);
 
 public:
   bool should_render;
   Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start);
-  void step();
+  void execute();
 };

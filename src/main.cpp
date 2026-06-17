@@ -62,7 +62,7 @@ int main(int argc, const char **argv) {
       }
 
       while (!cpu.should_render) {
-        cpu.step();
+        cpu.execute();
       }
 
       void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
