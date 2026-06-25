@@ -1,13 +1,29 @@
-# rvcore: RISC-V emulator that runs DOOM
+# rvcore: A tiny RISC-V emulator that runs DOOM
 
 ![Output](image.png)
 
 <div align="center">
-  <a href="https://github.com/lalitshankarch/doomgeneric">doomgeneric</a> running on rvcore
+  DOOM running in rvcore | <a href="https://youtu.be/f5uygzEmdLw?si=Q32DF_eGzetCb8SE">Video demo</a>
 </div>
 <br/>
 
-`rvcore` is a single-core RISC-V emulator that implements the RV32IM ISA, except for the `FENCE` and `EBREAK` instructions, which are currently `NOP`.
+`rvcore` is a RISC-V emulator that serves as a minimal environment capable of running DOOM. It implements the RV32IM ISA except for the `FENCE` and `EBREAK` instructions, which are currently stubbed.
+
+## Milestones
+
+- [x] Run flat binaries written in assembly
+
+- [x] Run flat binaries written in C
+
+- [x] Load ELF binaries (binaries with a single `PT_LOAD` segment work)
+
+- [x] Implement the `newlib` stubs needed to run DOOM
+
+- [x] Get DOOM to boot
+
+- [x] Make DOOM playable
+
+- [x] Implement the M extension
 
 ## Build instructions
 
@@ -27,19 +43,3 @@
 1. Clone https://github.com/lalitshankarch/doomgeneric
 2. `riscv64-unknown-elf-gcc` or the `riscv64-gnu-toolchain` configured with `./configure --with-multilib-generator="rv32im-ilp32--"` must be installed
 3. Navigate to `doomgeneric` and run `make`
-
-## Milestones
-
-- [x] Run flat binaries written in assembly language
-
-- [x] Run flat binaries written in C language
-
-- [x] Run ELF binaries (binaries with a single `PT_LOAD` segment work)
-
-- [x] Implement the `newlib` stubs needed to run DOOM
-
-- [x] Get DOOM to boot
-
-- [x] Make DOOM playable
-
-- [x] Implement the M extension
