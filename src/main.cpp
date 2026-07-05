@@ -30,15 +30,16 @@ int main(int argc, const char **argv) {
     }
 
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
-                                SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH,
-                                WINDOW_HEIGHT);
+                                SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH / 2,
+                                WINDOW_HEIGHT / 2);
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 
     std::vector<u8> memory;
     ExecSeg exec_seg = ExecSeg::read_into(memory, argv[1]);
 
     memory.resize(MEM_SIZE);
 
-    Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
+    Cpu cpu(memory, exec_seg.entry, exec_seg.nbytes, exec_seg.nmembytes);
 
     bool quit = false;
     while (!quit) {
@@ -67,7 +68,7 @@ int main(int argc, const char **argv) {
 
       void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
       SDL_UpdateTexture(texture, nullptr, pixels,
-                        WINDOW_WIDTH * sizeof(uint32_t));
+                        WINDOW_WIDTH / 2 * sizeof(uint32_t));
       SDL_RenderClear(renderer);
       SDL_RenderTexture(renderer, texture, nullptr, nullptr);
       SDL_RenderPresent(renderer);

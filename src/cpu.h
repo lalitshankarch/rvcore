@@ -6,7 +6,7 @@
 
 class Cpu {
   std::array<u32, 32> regs;
-  u32 pc, instr, heap_ptr;
+  u32 pc, instr, end, heap_ptr, sys_code;
   std::vector<u8> &memory;
 
   enum Opcode : u32 {
@@ -58,9 +58,12 @@ class Cpu {
 
   void set_reg(u32 idx, u32 val);
   u32 reg(u32 idx);
+  std::pair<void*, u64> jit_compile();
 
 public:
   bool should_render;
-  Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start);
+  Cpu(std::vector<u8> &mem, u32 pc_start, u32 prog_end, u32 heap_start);
   void execute();
+  void execute_threaded();
+  void system();
 };

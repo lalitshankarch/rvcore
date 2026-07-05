@@ -1,13 +1,18 @@
 #include "cpu.h"
 #include "constants.h"
 #include "debug.h"
+#include "x86_64.h"
 #include <SDL3/SDL_timer.h>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
+#include <memoryapi.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <utility>
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #include <windows.h>
@@ -54,10 +59,14 @@
   u32 funct7 = instr >> 25;                                                    \
   u32 rd = (instr >> 7) & 0x1f;
 
-Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
-    : pc(pc_start), heap_ptr(heap_start), memory(mem), should_render(false) {
+static Cpu *cpu_ptr;
+
+Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 prog_end, u32 heap_start)
+    : pc(pc_start), end(prog_end), heap_ptr(heap_start), sys_code(UINT32_MAX),
+      memory(mem), should_render(false) {
   regs = {};
   regs[2] = STACK_START; // Set stack pointer
+  cpu_ptr = this;
 }
 
 void Cpu::set_reg(u32 idx, u32 val) {
@@ -118,7 +127,7 @@ static int translate_open_flags(int flag) {
   return h;
 }
 
-void Cpu::execute() {
+void Cpu::execute_threaded() {
   static void *targets[128]{};
   static bool initialized = false;
 
@@ -608,8 +617,8 @@ op_system: {
       break;
     }
     case 15: // _exit
-      EXCEPTION("EXIT");
-      break;
+      // EXCEPTION("EXIT");
+      return;
     default:
       EXCEPTION("Unknown syscall");
     }
@@ -623,4 +632,415 @@ op_system: {
   }
   NEXT;
 }
+}
+
+void Cpu::system() {
+  switch (sys_code) {
+  case 0: { // ECALL
+    // DEBUG_PRINT("ECALL {}", reg(17));
+    switch (reg(17)) {
+    case 0: { // _sbrk
+      i32 increment = i32(reg(10));
+      u32 old_ptr = heap_ptr;
+      u32 new_ptr = u32(i32(heap_ptr) + increment);
+      if (new_ptr >= reg(2))
+        EXCEPTION("_sbrk requested a block too big: {} bytes", increment);
+      heap_ptr = new_ptr;
+      set_reg(10, old_ptr);
+      break;
+    }
+    case 1: { // _open
+      u32 start = reg(10);
+      int flags = translate_open_flags(int(reg(11)));
+      mode_t mode = mode_t(reg(12));
+#if defined(_WIN32) && !defined(__CYGWIN__)
+      flags |= O_BINARY;
+#endif
+      int fd = open(host_char_ptr(memory, start), flags, mode);
+      set_reg(10, u32(fd));
+      break;
+    }
+    case 2: { // _read
+      int fd = int(reg(10));
+      u32 start = reg(11);
+      u32 nbytes = reg(12);
+      ssize_t bytes_written = read(fd, &memory[start], nbytes);
+      set_reg(10, u32(i32(bytes_written)));
+      break;
+    }
+    case 3: { // _write
+      int fd = int(reg(10));
+      u32 start = reg(11);
+      u32 nbytes = reg(12);
+      ssize_t bytes_written = write(fd, &memory[start], nbytes);
+      set_reg(10, u32(i32(bytes_written)));
+      break;
+    }
+    case 4: { // _lseek
+      int fd = int(reg(10));
+      off_t start = off_t(reg(11));
+      int whence = i32(reg(12));
+      off_t offset = lseek(fd, start, whence);
+      set_reg(10, u32(offset));
+      break;
+    }
+    case 5: { // _close
+      int fd = int(reg(10));
+      int ret = close(fd);
+      set_reg(10, u32(ret));
+      break;
+    }
+    case 6: { // _gettimeofday
+      struct timeval time;
+      int ret = gettimeofday(&time, nullptr);
+      set_reg(10, u32(time.tv_sec));
+      set_reg(11, u32(time.tv_usec));
+      set_reg(12, u32(ret));
+      break;
+    }
+    case 7: { // _usleep
+      u32 usec = reg(10);
+      SDL_Delay(usec / 1000);
+      set_reg(10, 0);
+      break;
+    }
+    case 8: { // _render_frame
+      should_render = true;
+      return;
+    }
+    case 9: { // _link
+      u32 oldpath = reg(10);
+      u32 newpath = reg(11);
+#if defined(_WIN32) && !defined(__CYGWIN__)
+      BOOL res = CreateHardLinkA(host_char_ptr(memory, newpath),
+                                 host_char_ptr(memory, oldpath), nullptr);
+      int ret = (res == TRUE) ? 0 : -1;
+#else
+      int ret =
+          link(host_char_ptr(memory, oldpath), host_char_ptr(memory, newpath));
+#endif
+      set_reg(10, u32(ret));
+      break;
+    }
+    case 10: { // _unlink
+      u32 path = reg(10);
+      int ret = unlink(host_char_ptr(memory, path));
+      set_reg(10, u32(ret));
+      break;
+    }
+    case 11: { // mkdir
+      u32 path = reg(10);
+#if defined(_WIN32) && !defined(__CYGWIN__)
+      int ret = mkdir(host_char_ptr(memory, path));
+#else
+      u32 mode = reg(11);
+      int ret = mkdir(host_char_ptr(memory, path), mode);
+#endif
+      set_reg(10, u32(ret));
+      break;
+    }
+    case 12: { // _rmdir
+      u32 path = reg(10);
+      int ret = rmdir(host_char_ptr(memory, path));
+      set_reg(10, u32(ret));
+      break;
+    }
+    case 15: // _exit
+      // EXCEPTION("EXIT");
+      return;
+    default:
+      EXCEPTION("Unknown syscall");
+    }
+    break;
+  }
+  case 1:
+    EXCEPTION("EBREAK");
+    break;
+  default:
+    EXCEPTION("Unhandled SYSTEM");
+  }
+}
+
+void Cpu::execute() {
+  std::pair<void *, u64> ret = jit_compile();
+  void (*func)() = reinterpret_cast<void (*)()>(ret.first);
+
+  // for (int i = 0; i < 960; i++) {
+  //   // %02X prints each byte as a 2-digit uppercase hex number (e.g., 0A, FF)
+  //   printf("%02X ", *((u8 *)ret.first + i));
+
+  //   // Optional: Print a newline every 16 bytes for clean formatting
+  //   if ((i + 1) % 16 == 0) {
+  //     printf("\n");
+  //   }
+  // }
+
+  constexpr int iterations = 1'00'000'000;
+
+  auto start_time = std::chrono::steady_clock::now();
+
+  pc = 0;
+  for (int i = 0; i < iterations; i++)
+    for (int j = 0; j < 1; j++) {
+      func();
+    }
+
+  auto end_time = std::chrono::steady_clock::now();
+
+  double ms =
+      std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+  printf("Time: %.3f ms\n", ms);
+  printf("a0: %d, a1: %d, a2: %d, a3: %d, a4: %d, a5: %d, a6: %d, t0: %d, t1: "
+         "%d, t2: %d, x0: %d",
+         reg(10), reg(11), reg(12), reg(13), reg(14), reg(15), reg(16), reg(5),
+         reg(6), reg(7), reg(0));
+  EXCEPTION("Done executing basic block");
+}
+
+static void call_system() { cpu_ptr->system(); }
+
+std::pair<void *, u64> Cpu::jit_compile() {
+  printf("compile basic block at: 0x%x\n", pc);
+
+  std::pair<void *, u64> ret = {nullptr, -1};
+
+  void *ptr =
+      VirtualAlloc(nullptr, 4096, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+  x86_64::ptr = ptr;
+  if (!ptr) {
+    printf("VirtualAlloc failed: %lu\n", GetLastError());
+  }
+  ret.first = ptr;
+
+  x86_64::mov(RDX, u64(&regs[0]));
+
+  while (pc < end) {
+    instr = load32_(memory, pc);
+    pc += 4;
+
+    switch (instr & 0x7f) {
+    case OP_LUI: {
+      u32 rd = (instr >> 7) & 0x1f;
+      u32 u_imm = (instr >> 12) << 12;
+      if (rd == 0)
+        break;
+      x86_64::mov(RDX, i32(rd) * 4, u_imm);
+      break;
+    }
+    // case OP_BRANCH: {
+    //   u32 imm = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11)
+    //   |
+    //             (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
+    //   u32 offset = u32(i32(imm << 19) >> 19);
+    //   u32 addr = (pc - 4) + offset;
+    //   u32 rs2 = (instr >> 20) & 0x1f;
+    //   u32 rs1 = (instr >> 15) & 0x1f;
+    //   u32 funct3 = (instr >> 12) & 0x7;
+    //   switch (funct3) {
+    //   case BNE: {
+    //     if (reg(rs1) != reg(rs2))
+    //       pc = addr;
+    //     break;
+    //   }
+    //   }
+    // }
+    case OP_IMM: {
+      u32 rd = (instr >> 7) & 0x1f;
+      if (rd == 0)
+        break;
+      u32 funct3 = (instr >> 12) & 0x7;
+      u32 rs1 = (instr >> 15) & 0x1f;
+      u32 imm_se = u32(i32(instr) >> 20);
+      switch (funct3) {
+      case ADDI: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::add(EAX, imm_se);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case SLLI: {
+        u32 funct7 = instr >> 25;
+        u8 shamt = (instr >> 20) & 0x1f;
+        if (funct7 == 0b0000000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::sal(EAX, shamt);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else
+          EXCEPTION("Unhandled funct7");
+        break;
+      }
+      case SLTI: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::cmp(EAX, imm_se);
+        x86_64::setl(AL);
+        x86_64::movzx(EAX, AL);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case SLTIU: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::cmp(EAX, imm_se);
+        x86_64::setb(AL);
+        x86_64::movzx(EAX, AL);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case XORI: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::xori(EAX, imm_se);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case SRXI: {
+        u32 funct7 = instr >> 25;
+        u8 shamt = (instr >> 20) & 0x1f;
+        if (funct7 == 0b0000000) { // SRLI
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::shr(EAX, shamt);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else if (funct7 == 0b0100000) { // SRAI
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::sar(EAX, shamt);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else {
+          EXCEPTION("Unhandled funct7");
+        }
+        break;
+      }
+      case ORI: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::ori(EAX, imm_se);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case ANDI: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::andi(EAX, imm_se);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      }
+      break;
+    }
+    case OP_REG: {
+      u32 rd = (instr >> 7) & 0x1f;
+      if (rd == 0)
+        break;
+      u32 funct3 = (instr >> 12) & 0x7;
+      u32 rs1 = (instr >> 15) & 0x1f;
+      u32 rs2 = (instr >> 20) & 0x1f;
+      u32 funct7 = instr >> 25;
+      switch (funct3) {
+      case ADD: {
+        if (funct7 == 0b0000000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::addr(EAX, ECX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else if (funct7 == 0b0100000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::subr(EAX, ECX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        }
+        break;
+      }
+      case SLL: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::mov(ECX, RDX, i32(rs2) * 4);
+        x86_64::sal(EAX);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case SLT: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::mov(ECX, RDX, i32(rs2) * 4);
+        x86_64::cmp(EAX, ECX);
+        x86_64::setl(AL);
+        x86_64::movzx(EAX, AL);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case SLTU: {
+        x86_64::mov(EAX, RDX, i32(rs1) * 4);
+        x86_64::mov(ECX, RDX, i32(rs2) * 4);
+        x86_64::cmp(EAX, ECX);
+        x86_64::setb(AL);
+        x86_64::movzx(EAX, AL);
+        x86_64::mov(RDX, i32(rd) * 4, EAX);
+        break;
+      }
+      case XOR: {
+        if (funct7 == 0b0000000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::xorr(EAX, ECX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        }
+        break;
+      }
+      case SRX: {
+        if (funct7 == 0b0000000) { // SRL
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::shr(EAX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else if (funct7 == 0b0100000) { // SRA
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::sar(EAX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        } else {
+          EXCEPTION("Unhandled funct7");
+        }
+        break;
+      }
+      case OR: {
+        if (funct7 == 0b0000000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::orr(EAX, ECX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        }
+        break;
+      }
+      case AND: {
+        if (funct7 == 0b0000000) {
+          x86_64::mov(EAX, RDX, i32(rs1) * 4);
+          x86_64::mov(ECX, RDX, i32(rs2) * 4);
+          x86_64::andr(EAX, ECX);
+          x86_64::mov(RDX, i32(rd) * 4, EAX);
+        }
+        break;
+      }
+      }
+      break;
+    }
+    case OP_SYSTEM: {
+      u32 imm_se = u32(i32(instr) >> 20);
+      x86_64::mov(RCX, u64(&sys_code));
+      x86_64::mov(RCX, 0, imm_se);
+      x86_64::mov(RCX, u64(call_system));
+      x86_64::call(RCX);
+      break;
+    }
+    default: {
+      goto exit;
+    }
+    }
+  }
+
+exit:
+
+  x86_64::ret();
+
+  DWORD old;
+  if (!VirtualProtect(ret.first, 4096, PAGE_EXECUTE_READ, &old)) {
+    printf("VirtualProtect failed: %lu\n", GetLastError());
+  }
+
+  printf("Wrote: %lld bytes\n", u64(x86_64::ptr) - u64(ret.first));
+
+  return ret;
 }

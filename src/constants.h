@@ -2,13 +2,13 @@
 
 #include "types.h"
 
-const u32 MEM_SIZE = 1024 * 1024 * 8;
+const u32 MEM_SIZE = 1024 * 1024 * 256;
 const u32 QUEUE_SIZE = 32;
 const u32 QUEUE_START = MEM_SIZE - QUEUE_SIZE - 1;
 const u32 QUEUE_READ_IDX = QUEUE_START - 1;
 const u32 QUEUE_WRITE_IDX = QUEUE_READ_IDX - 1;
-const u32 VRAM_SIZE = 640 * 400 * 4;
+const u32 VRAM_SIZE = 320 * 240 * 4;
 const u32 VRAM_START = QUEUE_WRITE_IDX - VRAM_SIZE;
 const u32 STACK_START = VRAM_START;
 const u32 WINDOW_WIDTH = 640;
-const u32 WINDOW_HEIGHT = 400;
+const u32 WINDOW_HEIGHT = 480;

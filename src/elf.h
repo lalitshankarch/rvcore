@@ -17,12 +17,12 @@ struct ProgHeader32 {
 };
 
 struct ExecSeg {
-  u32 entry, nmembytes;
+  u32 entry, nbytes, nmembytes;
 
   static ExecSeg read_into(std::vector<u8> &memory, const char *path);
 
 private:
-  u32 offset, nbytes;
+  u32 offset;
 
   static bool validate_elf_header(const ElfHeader32 *elf_header);
   static ExecSeg get_info(std::ifstream &file);

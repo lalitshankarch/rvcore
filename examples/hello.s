@@ -7,7 +7,7 @@ _start:
   addi a1, a0, %lo(msg)
   addi a2, x0, 13
 
-  li   a7, 4
+  li   a7, 3
   ecall
 
   li   a7, 10

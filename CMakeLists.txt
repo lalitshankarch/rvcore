@@ -12,7 +12,7 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(rvcore ${SOURCES})
 
 find_package(SDL3 REQUIRED)
-target_link_libraries(rvcore PRIVATE SDL3::SDL3)
+target_link_libraries(rvcore PRIVATE SDL3::SDL3 mman)
 
 target_compile_options(rvcore PRIVATE
     -Wall
