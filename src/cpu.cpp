@@ -2,11 +2,13 @@
 #include "constants.h"
 #include "debug.h"
 #include <SDL3/SDL_timer.h>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <thread>
 #include <unistd.h>
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
@@ -562,7 +564,7 @@ op_system: {
     }
     case 7: { // _usleep
       u32 usec = reg(10);
-      SDL_Delay(usec / 1000);
+      std::this_thread::sleep_for(std::chrono::microseconds(usec));
       set_reg(10, 0);
       break;
     }
