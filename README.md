@@ -43,3 +43,9 @@
 1. Clone https://github.com/lalitshankarch/doomgeneric
 2. `riscv64-unknown-elf-gcc` or the `riscv64-gnu-toolchain` configured with `./configure --with-multilib-generator="rv32im-ilp32--"` must be installed
 3. Navigate to `doomgeneric` and run `make`
+
+## Running other programs
+
+Navigate to the `examples` directory to see how to run simple C programs on `rvcore`. Only a few essential newlib stubs are implemented.
+
+To implement a new stub, first modify `stubs.h` and then add the appropriate handler in `cpu.cpp`.
