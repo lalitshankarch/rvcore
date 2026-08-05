@@ -2,6 +2,7 @@
 #include "constants.h"
 #include "debug.h"
 #include <SDL3/SDL_timer.h>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -125,6 +126,8 @@ void Cpu::execute() {
   static bool initialized = false;
 
   if (!initialized) {
+    std::fill(std::begin(targets), std::end(targets), &&illegal_op);
+
     targets[OP_LUI] = &&op_lui;
     targets[OP_AUIPC] = &&op_auipc;
     targets[OP_JAL] = &&op_jal;
@@ -180,7 +183,7 @@ op_jalr: {
 
 op_branch: {
   static void *branch_targets[8] = {
-      &&beq, &&bne, nullptr, nullptr, &&blt, &&bge, &&bltu, &&bgeu,
+      &&beq, &&bne, &&illegal_op, &&illegal_op, &&blt, &&bge, &&bltu, &&bgeu,
   };
 
   goto *branch_targets[FUNCT3(instr)];
@@ -229,9 +232,8 @@ bgeu: {
 }
 
 op_load: {
-  static void *load_targets[8] = {
-      &&lb, &&lh, &&lw, nullptr, &&lbu, &&lhu,
-  };
+  static void *load_targets[8] = {&&lb,  &&lh,  &&lw,         &&illegal_op,
+                                  &&lbu, &&lhu, &&illegal_op, &&illegal_op};
 
   goto *load_targets[FUNCT3(instr)];
 
@@ -267,11 +269,9 @@ lhu: {
 }
 
 op_store: {
-  static void *store_targets[8] = {
-      &&sb,
-      &&sh,
-      &&sw,
-  };
+  static void *store_targets[8] = {&&sb,         &&sh,         &&sw,
+                                   &&illegal_op, &&illegal_op, &&illegal_op,
+                                   &&illegal_op, &&illegal_op};
 
   goto *store_targets[FUNCT3(instr)];
 
@@ -624,5 +624,9 @@ op_system: {
     EXCEPTION("Unhandled SYSTEM");
   }
   NEXT;
+}
+
+illegal_op: {
+  EXCEPTION("Illegal instruction: instr=0x{:08x}, pc=0x{:08x}", instr, pc - 4);
 }
 }
