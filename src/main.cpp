@@ -4,7 +4,6 @@
 #include "elf.h"
 #include "keymapper.h"
 #include <SDL3/SDL.h>
-#include <exception>
 #include <vector>
 
 int main(int argc, const char **argv) {
@@ -17,66 +16,60 @@ int main(int argc, const char **argv) {
   SDL_Renderer *renderer = nullptr;
   SDL_Texture *texture = nullptr;
 
-  try {
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-      EXCEPTION("Failed to initialize SDL");
-    }
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
+    ABORT("Failed to initialize SDL");
+  }
 
-    if (!SDL_CreateWindowAndRenderer("rvdoom", WINDOW_WIDTH, WINDOW_HEIGHT,
-                                     SDL_WINDOW_INPUT_FOCUS, &window,
-                                     &renderer)) {
-      SDL_Quit();
-      EXCEPTION("Failed to create window and renderer");
-    }
+  if (!SDL_CreateWindowAndRenderer("rvdoom", WINDOW_WIDTH, WINDOW_HEIGHT,
+                                   SDL_WINDOW_INPUT_FOCUS, &window,
+                                   &renderer)) {
+    SDL_Quit();
+    ABORT("Failed to create window and renderer");
+  }
 
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
-                                SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH,
-                                WINDOW_HEIGHT);
+  texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_XRGB8888,
+                              SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH,
+                              WINDOW_HEIGHT);
 
-    std::vector<u8> memory;
-    ExecSeg exec_seg = ExecSeg::read_into(memory, argv[1]);
+  std::vector<u8> memory;
+  ExecSeg exec_seg = ExecSeg::read_into(memory, argv[1]);
 
-    memory.resize(MEM_SIZE);
+  memory.resize(MEM_SIZE);
 
-    Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
+  Cpu cpu(memory, exec_seg.entry, exec_seg.nmembytes);
 
-    bool quit = false;
-    while (!quit) {
-      u16 *queue = reinterpret_cast<u16 *>(
-          reinterpret_cast<void *>(&memory[QUEUE_START]));
-      SDL_Event event;
-      while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
-          quit = true;
-          continue;
-        }
-        if (event.type == SDL_EVENT_KEY_DOWN ||
-            event.type == SDL_EVENT_KEY_UP) {
-          u16 key = convertKey(event.key.key);
-          u16 keyData =
-              u16((((event.type == SDL_EVENT_KEY_DOWN) ? 1 : 0) << 8) | key);
-          queue[memory[QUEUE_WRITE_IDX]] = keyData;
-          memory[QUEUE_WRITE_IDX]++;
-          memory[QUEUE_WRITE_IDX] %= 16;
-        }
+  bool quit = false;
+  while (!quit) {
+    u16 *queue =
+        reinterpret_cast<u16 *>(reinterpret_cast<void *>(&memory[QUEUE_START]));
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_EVENT_QUIT) {
+        quit = true;
+        continue;
       }
-
-      while (!cpu.should_render) {
-        cpu.execute();
+      if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        u16 key = convertKey(event.key.key);
+        u16 keyData =
+            u16((((event.type == SDL_EVENT_KEY_DOWN) ? 1 : 0) << 8) | key);
+        queue[memory[QUEUE_WRITE_IDX]] = keyData;
+        memory[QUEUE_WRITE_IDX]++;
+        memory[QUEUE_WRITE_IDX] %= 16;
       }
-
-      void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
-      SDL_UpdateTexture(texture, nullptr, pixels,
-                        WINDOW_WIDTH * sizeof(uint32_t));
-      SDL_RenderClear(renderer);
-      SDL_RenderTexture(renderer, texture, nullptr, nullptr);
-      SDL_RenderPresent(renderer);
-
-      cpu.should_render = false;
     }
 
-  } catch (std::exception &ex) {
-    std::cerr << std::endl << RED << ex.what() << RESET << std::endl;
+    while (!cpu.should_render) {
+      cpu.execute();
+    }
+
+    void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);
+    SDL_UpdateTexture(texture, nullptr, pixels,
+                      WINDOW_WIDTH * sizeof(uint32_t));
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer, texture, nullptr, nullptr);
+    SDL_RenderPresent(renderer);
+
+    cpu.should_render = false;
   }
 
   SDL_DestroyTexture(texture);

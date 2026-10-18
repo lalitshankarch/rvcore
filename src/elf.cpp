@@ -26,7 +26,7 @@ ExecSeg ExecSeg::get_info(std::ifstream &file) {
   file.read(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
 
   if (!validate_elf_header(&elf_header)) {
-    EXCEPTION("Invalid executable format");
+    ABORT("Invalid executable format");
   }
 
   ProgHeader32 prog_header{};
@@ -45,7 +45,7 @@ ExecSeg ExecSeg::get_info(std::ifstream &file) {
     }
   }
 
-  EXCEPTION("No executable segment found");
+  ABORT("No executable segment found");
 }
 
 // rvcore expects ELF files with only one PT_LOAD segment at vaddr 0

@@ -174,7 +174,7 @@ op_jalr: {
   u32 rs1 = (instr >> 15) & 0x1f;
   u32 rd = (instr >> 7) & 0x1f;
   if (FUNCT3(instr) != 0)
-    EXCEPTION("Unhandled funct3");
+    ABORT("Unhandled funct3");
   u32 target_addr = (imm_se + reg(rs1)) & ~u32(1);
   set_reg(rd, pc);
   pc = target_addr;
@@ -316,7 +316,7 @@ slli: {
   if (funct7 == 0b0000000)
     set_reg(rd, reg(rs1) << shamt);
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -351,7 +351,7 @@ srxi: {
   else if (funct7 == 0b0100000)
     set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRAI
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -386,7 +386,7 @@ add: {
   else if (funct7 == 0b0100000)
     set_reg(rd, reg(rs1) - reg(rs2));
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -398,7 +398,7 @@ sll: {
   else if (funct7 == 0b0000001) // MULH
     set_reg(rd, u32((i64(i32(reg(rs1))) * i64(i32(reg(rs2)))) >> 32));
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -409,7 +409,7 @@ slt: {
   else if (funct7 == 0b0000001) // MULHSU
     set_reg(rd, u32((i64(i32(reg(rs1))) * i64(u64(reg(rs2)))) >> 32));
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -420,7 +420,7 @@ sltu: {
   else if (funct7 == 0b0000001) // MULHU
     set_reg(rd, u32((u64(reg(rs1)) * u64(reg(rs2))) >> 32));
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -437,7 +437,7 @@ xorr: {
     else
       set_reg(rd, u32(dividend / divisor));
   } else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -455,7 +455,7 @@ srx: {
   } else if (funct7 == 0b0100000)
     set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRA
   else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -472,7 +472,7 @@ orr: {
     else
       set_reg(rd, u32(dividend % divisor));
   } else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 
@@ -487,7 +487,7 @@ andr: {
     else
       set_reg(rd, dividend % divisor);
   } else
-    EXCEPTION("Unhandled funct7");
+    ABORT("Unhandled funct7");
   NEXT;
 }
 }
@@ -508,7 +508,7 @@ op_system: {
       u32 old_ptr = heap_ptr;
       u32 new_ptr = u32(i32(heap_ptr) + increment);
       if (new_ptr >= reg(2))
-        EXCEPTION("_sbrk requested a block too big: {} bytes", increment);
+        ABORT("_sbrk requested a block too big: {} bytes", increment);
       heap_ptr = new_ptr;
       set_reg(10, old_ptr);
       break;
@@ -610,23 +610,23 @@ op_system: {
       break;
     }
     case 15: // _exit
-      EXCEPTION("EXIT");
+      ABORT("EXIT");
       break;
     default:
-      EXCEPTION("Unknown syscall");
+      ABORT("Unknown syscall");
     }
     break;
   }
   case 1:
-    EXCEPTION("EBREAK");
+    ABORT("EBREAK");
     break;
   default:
-    EXCEPTION("Unhandled SYSTEM");
+    ABORT("Unhandled SYSTEM");
   }
   NEXT;
 }
 
 illegal_op: {
-  EXCEPTION("Illegal instruction: instr=0x{:08x}, pc=0x{:08x}", instr, pc - 4);
+  ABORT("Illegal instruction: instr=0x{:08x}, pc=0x{:08x}", instr, pc - 4);
 }
 }

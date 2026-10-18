@@ -32,6 +32,8 @@ target_compile_options(rvcore PRIVATE
     -Woverloaded-virtual
     -Wold-style-cast
     -Wzero-as-null-pointer-constant
+    -fno-exceptions
+    -fno-rtti
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

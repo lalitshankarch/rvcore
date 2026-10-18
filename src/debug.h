@@ -3,14 +3,16 @@
 #include "types.h"
 #include <format>
 #include <iostream>
-#include <stdexcept>
 
 constexpr const char *WHITE = "\033[37m";
 constexpr const char *YELLOW = "\033[33m";
 constexpr const char *RED = "\033[31m";
 constexpr const char *RESET = "\033[0m";
 
-#define EXCEPTION(...) throw std::runtime_error(std::format(__VA_ARGS__))
+#define ABORT(...) { \
+  ERROR_PRINT(__VA_ARGS__);\
+  std::abort();\
+}
 
 #ifndef NDEBUG
 #define DEBUG_PRINT(...)                                                       \
