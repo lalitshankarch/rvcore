@@ -88,6 +88,8 @@ int _kill(pid_t pid, int sig) { return -1; }
 void _exit(int status) {
   __asm__ __volatile__("li      a7, 15\n\t"
                        "ecall\n\t");
+
+  __builtin_unreachable();
 }
 
 void *_sbrk(intptr_t increment) {
