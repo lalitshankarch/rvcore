@@ -1,61 +1,40 @@
 #include "cpu.h"
 #include "constants.h"
 #include "debug.h"
-#include <SDL3/SDL_timer.h>
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <thread>
-#include <unistd.h>
 
-#if defined(_WIN32) && !defined(__CYGWIN__)
+#if defined(_WIN32)
 #include <windows.h>
 #endif
 
-#define NEXT                                                                   \
-  instr = load32_(memory, pc);                                                 \
-  pc += 4;                                                                     \
-  goto *targets[instr & 0x7f];
+#ifdef _MSC_VER
+#include <direct.h>
+#include <io.h>
 
-#define FUNCT3(instr) ((instr >> 12) & 0x7)
-
-#define BRANCH_COMMON                                                          \
-  u32 rs1 = (instr >> 15) & 0x1f;                                              \
-  u32 rs2 = (instr >> 20) & 0x1f;                                              \
-  u32 imm = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |     \
-            (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);       \
-  u32 offset = u32(i32(imm << 19) >> 19);                                      \
-  u32 addr = (pc - 4) + offset;
-
-#define LOAD_COMMON                                                            \
-  u32 imm_se = u32(i32(instr) >> 20);                                          \
-  u32 rs1 = (instr >> 15) & 0x1f;                                              \
-  u32 rd = (instr >> 7) & 0x1f;                                                \
-  u32 offset = imm_se;                                                         \
-  u32 addr = reg(rs1) + offset;
-
-#define STORE_COMMON                                                           \
-  u32 rs1 = (instr >> 15) & 0x1f;                                              \
-  u32 rs2 = (instr >> 20) & 0x1f;                                              \
-  u32 off1 = (instr >> 7) & 0x1f;                                              \
-  u32 off2 = instr >> 25;                                                      \
-  u32 imm = off2 << 5 | off1;                                                  \
-  u32 offset = u32((i32(imm) << 20) >> 20);                                    \
-  u32 addr = reg(rs1) + offset;
-
-#define IMM_COMMON                                                             \
-  u32 rs1 = (instr >> 15) & 0x1f;                                              \
-  u32 rd = (instr >> 7) & 0x1f;
-
-#define REG_COMMON                                                             \
-  u32 rs1 = (instr >> 15) & 0x1f;                                              \
-  u32 rs2 = (instr >> 20) & 0x1f;                                              \
-  u32 funct7 = instr >> 25;                                                    \
-  u32 rd = (instr >> 7) & 0x1f;
+#define rv_open _open
+#define rv_read _read
+#define rv_write _write
+#define rv_lseek _lseek
+#define rv_close _close
+#define rv_unlink _unlink
+#define rv_mkdir(path, mode) _mkdir(path)
+#define rv_rmdir _rmdir
+#else
+#include <unistd.h>
+#define rv_open open
+#define rv_read read
+#define rv_write write
+#define rv_lseek lseek
+#define rv_close close
+#define rv_unlink unlink
+#define rv_mkdir(path, mode) mkdir(path, mode)
+#define rv_rmdir rmdir
+#endif
 
 Cpu::Cpu(std::vector<u8> &mem, u32 pc_start, u32 heap_start)
     : pc(pc_start), heap_ptr(heap_start), memory(mem), should_render(false) {
@@ -121,512 +100,395 @@ static int translate_open_flags(int flag) {
   return h;
 }
 
-void Cpu::execute() {
-  static void *targets[128]{};
-  static bool initialized = false;
-
-  if (!initialized) {
-    std::fill(std::begin(targets), std::end(targets), &&illegal_op);
-
-    targets[OP_LUI] = &&op_lui;
-    targets[OP_AUIPC] = &&op_auipc;
-    targets[OP_JAL] = &&op_jal;
-    targets[OP_JALR] = &&op_jalr;
-    targets[OP_BRANCH] = &&op_branch;
-    targets[OP_LOAD] = &&op_load;
-    targets[OP_STORE] = &&op_store;
-    targets[OP_IMM] = &&op_imm;
-    targets[OP_REG] = &&op_reg;
-    targets[OP_FENCE] = &&op_fence;
-    targets[OP_SYSTEM] = &&op_system;
-
-    initialized = true;
-  }
-
-  NEXT;
-
-op_lui: {
-  u32 rd = (instr >> 7) & 0x1f;
-  u32 u_imm = (instr >> 12) << 12;
-  set_reg(rd, u_imm);
-  NEXT;
+void Cpu::step() {
+  u32 instr = load32_(memory, pc);
+  pc += 4;
+  execute_instr(instr);
 }
 
-op_auipc: {
-  u32 rd = (instr >> 7) & 0x1f;
-  u32 u_imm = (instr >> 12) << 12;
-  set_reg(rd, u_imm + pc - 4);
-  NEXT;
-}
-
-op_jal: {
-  u32 rd = (instr >> 7) & 0x1f;
-  u32 imm = (((instr >> 31) & 0x1) << 20) | (((instr >> 12) & 0xff) << 12) |
-            (((instr >> 20) & 0x1) << 11) | (((instr >> 21) & 0x3ff) << 1);
-  u32 offset = u32(i32(imm << 11) >> 11);
-  set_reg(rd, pc);
-  pc = (pc - 4) + offset;
-  NEXT;
-}
-
-op_jalr: {
+void Cpu::execute_instr(u32 instr) {
   u32 imm_se = u32(i32(instr) >> 20);
+  u32 u_imm = (instr >> 12) << 12;
+  u32 funct7 = instr >> 25;
+  u32 rs2 = (instr >> 20) & 0x1f;
   u32 rs1 = (instr >> 15) & 0x1f;
+  u32 funct3 = (instr >> 12) & 0x7;
   u32 rd = (instr >> 7) & 0x1f;
-  if (FUNCT3(instr) != 0)
-    ABORT("Unhandled funct3");
-  u32 target_addr = (imm_se + reg(rs1)) & ~u32(1);
-  set_reg(rd, pc);
-  pc = target_addr;
-  NEXT;
-}
+  u32 opcode = instr & 0x7f;
 
-op_branch: {
-  static void *branch_targets[8] = {
-      &&beq, &&bne, &&illegal_op, &&illegal_op, &&blt, &&bge, &&bltu, &&bgeu,
-  };
-
-  goto *branch_targets[FUNCT3(instr)];
-
-beq: {
-  BRANCH_COMMON;
-  if (reg(rs1) == reg(rs2))
-    pc = addr;
-  NEXT;
-}
-
-bne: {
-  BRANCH_COMMON;
-  if (reg(rs1) != reg(rs2))
-    pc = addr;
-  NEXT;
-}
-
-blt: {
-  BRANCH_COMMON;
-  if (i32(reg(rs1)) < i32(reg(rs2)))
-    pc = addr;
-  NEXT;
-}
-
-bge: {
-  BRANCH_COMMON;
-  if (i32(reg(rs1)) >= i32(reg(rs2)))
-    pc = addr;
-  NEXT;
-}
-
-bltu: {
-  BRANCH_COMMON;
-  if (reg(rs1) < reg(rs2))
-    pc = addr;
-  NEXT;
-}
-
-bgeu: {
-  BRANCH_COMMON;
-  if (reg(rs1) >= reg(rs2))
-    pc = addr;
-  NEXT;
-}
-}
-
-op_load: {
-  static void *load_targets[8] = {&&lb,  &&lh,  &&lw,         &&illegal_op,
-                                  &&lbu, &&lhu, &&illegal_op, &&illegal_op};
-
-  goto *load_targets[FUNCT3(instr)];
-
-lb: {
-  LOAD_COMMON;
-  set_reg(rd, u32(i8(memory[addr])));
-  NEXT;
-}
-
-lh: {
-  LOAD_COMMON;
-  set_reg(rd, u32(i16(load16_(memory, addr))));
-  NEXT;
-}
-
-lw: {
-  LOAD_COMMON;
-  set_reg(rd, load32_(memory, addr));
-  NEXT;
-}
-
-lbu: {
-  LOAD_COMMON;
-  set_reg(rd, memory[addr]);
-  NEXT;
-}
-
-lhu: {
-  LOAD_COMMON;
-  set_reg(rd, load16_(memory, addr));
-  NEXT;
-}
-}
-
-op_store: {
-  static void *store_targets[8] = {&&sb,         &&sh,         &&sw,
-                                   &&illegal_op, &&illegal_op, &&illegal_op,
-                                   &&illegal_op, &&illegal_op};
-
-  goto *store_targets[FUNCT3(instr)];
-
-sb: {
-  STORE_COMMON;
-  memory[addr] = u8(reg(rs2));
-  NEXT;
-}
-
-sh: {
-  STORE_COMMON;
-  store16_(memory, addr, u16(reg(rs2)));
-  NEXT;
-}
-
-sw: {
-  STORE_COMMON;
-  store32_(memory, addr, reg(rs2));
-  NEXT;
-}
-}
-
-op_imm: {
-  static void *imm_targets[8] = {
-      &&addi, &&slli, &&slti, &&sltiu, &&xori, &&srxi, &&ori, &&andi,
-  };
-
-  goto *imm_targets[FUNCT3(instr)];
-
-addi: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, reg(rs1) + imm_se);
-  NEXT;
-}
-
-slli: {
-  IMM_COMMON;
-  u32 funct7 = instr >> 25;
-  u32 rs2 = (instr >> 20) & 0x1f;
-  u32 shamt = rs2;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) << shamt);
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-slti: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, i32(reg(rs1)) < i32(imm_se));
-  NEXT;
-}
-
-sltiu: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, reg(rs1) < imm_se);
-  NEXT;
-}
-
-xori: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, reg(rs1) ^ imm_se);
-  NEXT;
-}
-
-srxi: {
-  IMM_COMMON;
-  u32 funct7 = instr >> 25;
-  u32 rs2 = (instr >> 20) & 0x1f;
-  u32 shamt = rs2;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) >> shamt); // SRLI
-  else if (funct7 == 0b0100000)
-    set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRAI
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-ori: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, reg(rs1) | imm_se);
-  NEXT;
-}
-
-andi: {
-  IMM_COMMON;
-  u32 imm_se = u32(i32(instr) >> 20);
-  set_reg(rd, reg(rs1) & imm_se);
-  NEXT;
-}
-}
-
-op_reg: {
-  static void *reg_targets[8] = {
-      &&add, &&sll, &&slt, &&sltu, &&xorr, &&srx, &&orr, &&andr,
-  };
-
-  goto *reg_targets[FUNCT3(instr)];
-
-add: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) + reg(rs2));
-  else if (funct7 == 0b0000001) // MUL
-    set_reg(rd, reg(rs1) * reg(rs2));
-  else if (funct7 == 0b0100000)
-    set_reg(rd, reg(rs1) - reg(rs2));
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-sll: {
-  REG_COMMON;
-  u32 shamt = reg(rs2) & 0x1f;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) << shamt);
-  else if (funct7 == 0b0000001) // MULH
-    set_reg(rd, u32((i64(i32(reg(rs1))) * i64(i32(reg(rs2)))) >> 32));
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-slt: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
-  else if (funct7 == 0b0000001) // MULHSU
-    set_reg(rd, u32((i64(i32(reg(rs1))) * i64(u64(reg(rs2)))) >> 32));
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-sltu: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) < reg(rs2));
-  else if (funct7 == 0b0000001) // MULHU
-    set_reg(rd, u32((u64(reg(rs1)) * u64(reg(rs2))) >> 32));
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-xorr: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) ^ reg(rs2));
-  else if (funct7 == 0b0000001) { // DIV
-    i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
-    if (divisor == 0)
-      set_reg(rd, 0xffffffff);
-    else if (dividend == INT32_MIN && divisor == -1)
-      set_reg(rd, 0x80000000);
-    else
-      set_reg(rd, u32(dividend / divisor));
-  } else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-srx: {
-  REG_COMMON;
-  u32 shamt = reg(rs2) & 0x1f;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) >> shamt); // SRL
-  else if (funct7 == 0b0000001) {   // DIVU
-    u32 divisor = reg(rs2), dividend = reg(rs1);
-    if (divisor == 0)
-      set_reg(rd, 0xffffffff);
-    else
-      set_reg(rd, dividend / divisor);
-  } else if (funct7 == 0b0100000)
-    set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRA
-  else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-orr: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) | reg(rs2));
-  else if (funct7 == 0b0000001) { // REM
-    i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
-    if (divisor == 0)
-      set_reg(rd, u32(dividend));
-    else if (dividend == INT32_MIN && divisor == -1)
-      set_reg(rd, 0);
-    else
-      set_reg(rd, u32(dividend % divisor));
-  } else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-
-andr: {
-  REG_COMMON;
-  if (funct7 == 0b0000000)
-    set_reg(rd, reg(rs1) & reg(rs2));
-  else if (funct7 == 0b0000001) { // REMU
-    u32 divisor = reg(rs2), dividend = reg(rs1);
-    if (divisor == 0)
-      set_reg(rd, dividend);
-    else
-      set_reg(rd, dividend % divisor);
-  } else
-    ABORT("Unhandled funct7");
-  NEXT;
-}
-}
-
-op_fence: {
-  WARN_PRINT("FENCE not implemented");
-  NEXT;
-}
-
-op_system: {
-  u32 imm_se = u32(i32(instr) >> 20);
-  switch (imm_se) {
-  case 0: { // ECALL
-    // DEBUG_PRINT("ECALL {}", reg(17));
-    switch (reg(17)) {
-    case 0: { // _sbrk
-      i32 increment = i32(reg(10));
-      u32 old_ptr = heap_ptr;
-      u32 new_ptr = u32(i32(heap_ptr) + increment);
-      if (new_ptr >= reg(2))
-        ABORT("_sbrk requested a block too big: {} bytes", increment);
-      heap_ptr = new_ptr;
-      set_reg(10, old_ptr);
+  switch (opcode) {
+  case OP_LUI:
+    set_reg(rd, u_imm);
+    break;
+  case OP_AUIPC:
+    set_reg(rd, u_imm + pc - 4);
+    break;
+  case OP_JAL: {
+    u32 imm = (((instr >> 31) & 0x1) << 20) | (((instr >> 12) & 0xff) << 12) |
+              (((instr >> 20) & 0x1) << 11) | (((instr >> 21) & 0x3ff) << 1);
+    u32 offset = u32(i32(imm << 11) >> 11);
+    set_reg(rd, pc);
+    pc = (pc - 4) + offset;
+    break;
+  }
+  case OP_JALR: {
+    if (funct3 != 0)
+      ABORT("Unhandled funct3");
+    u32 target_addr = (imm_se + reg(rs1)) & ~u32(1);
+    set_reg(rd, pc);
+    pc = target_addr;
+    break;
+  }
+  case OP_BRANCH: {
+    u32 imm = (((instr >> 31) & 0x1) << 12) | (((instr >> 7) & 0x1) << 11) |
+              (((instr >> 25) & 0x3f) << 5) | (((instr >> 8) & 0xf) << 1);
+    u32 offset = u32(i32(imm << 19) >> 19);
+    u32 addr = (pc - 4) + offset;
+    switch (funct3) {
+    case BEQ:
+      if (reg(rs1) == reg(rs2))
+        pc = addr;
       break;
-    }
-    case 1: { // _open
-      u32 start = reg(10);
-      int flags = translate_open_flags(int(reg(11)));
-      mode_t mode = mode_t(reg(12));
-#if defined(_WIN32) && !defined(__CYGWIN__)
-      flags |= O_BINARY;
-#endif
-      int fd = open(host_char_ptr(memory, start), flags, mode);
-      set_reg(10, u32(fd));
+    case BNE:
+      if (reg(rs1) != reg(rs2))
+        pc = addr;
       break;
-    }
-    case 2: { // _read
-      int fd = int(reg(10));
-      u32 start = reg(11);
-      u32 nbytes = reg(12);
-      ssize_t bytes_written = read(fd, &memory[start], nbytes);
-      set_reg(10, u32(i32(bytes_written)));
+    case BLT:
+      if (i32(reg(rs1)) < i32(reg(rs2)))
+        pc = addr;
       break;
-    }
-    case 3: { // _write
-      int fd = int(reg(10));
-      u32 start = reg(11);
-      u32 nbytes = reg(12);
-      ssize_t bytes_written = write(fd, &memory[start], nbytes);
-      set_reg(10, u32(i32(bytes_written)));
+    case BGE:
+      if (i32(reg(rs1)) >= i32(reg(rs2)))
+        pc = addr;
       break;
-    }
-    case 4: { // _lseek
-      int fd = int(reg(10));
-      off_t start = off_t(reg(11));
-      int whence = i32(reg(12));
-      off_t offset = lseek(fd, start, whence);
-      set_reg(10, u32(offset));
+    case BLTU:
+      if (reg(rs1) < reg(rs2))
+        pc = addr;
       break;
-    }
-    case 5: { // _close
-      int fd = int(reg(10));
-      int ret = close(fd);
-      set_reg(10, u32(ret));
-      break;
-    }
-    case 6: { // _gettimeofday
-      struct timeval time;
-      int ret = gettimeofday(&time, nullptr);
-      set_reg(10, u32(time.tv_sec));
-      set_reg(11, u32(time.tv_usec));
-      set_reg(12, u32(ret));
-      break;
-    }
-    case 7: { // _usleep
-      u32 usec = reg(10);
-      std::this_thread::sleep_for(std::chrono::microseconds(usec));
-      set_reg(10, 0);
-      break;
-    }
-    case 8: { // _render_frame
-      should_render = true;
-      return;
-    }
-    case 9: { // _link
-      u32 oldpath = reg(10);
-      u32 newpath = reg(11);
-#if defined(_WIN32) && !defined(__CYGWIN__)
-      BOOL res = CreateHardLinkA(host_char_ptr(memory, newpath),
-                                 host_char_ptr(memory, oldpath), nullptr);
-      int ret = (res == TRUE) ? 0 : -1;
-#else
-      int ret =
-          link(host_char_ptr(memory, oldpath), host_char_ptr(memory, newpath));
-#endif
-      set_reg(10, u32(ret));
-      break;
-    }
-    case 10: { // _unlink
-      u32 path = reg(10);
-      int ret = unlink(host_char_ptr(memory, path));
-      set_reg(10, u32(ret));
-      break;
-    }
-    case 11: { // mkdir
-      u32 path = reg(10);
-#if defined(_WIN32) && !defined(__CYGWIN__)
-      int ret = mkdir(host_char_ptr(memory, path));
-#else
-      u32 mode = reg(11);
-      int ret = mkdir(host_char_ptr(memory, path), mode);
-#endif
-      set_reg(10, u32(ret));
-      break;
-    }
-    case 12: { // _rmdir
-      u32 path = reg(10);
-      int ret = rmdir(host_char_ptr(memory, path));
-      set_reg(10, u32(ret));
-      break;
-    }
-    case 15: // _exit
-      ABORT("EXIT");
+    case BGEU:
+      if (reg(rs1) >= reg(rs2))
+        pc = addr;
       break;
     default:
-      ABORT("Unknown syscall");
+      ABORT("Unhandled funct3");
     }
     break;
   }
-  case 1:
-    ABORT("EBREAK");
+  case OP_LOAD: {
+    u32 offset = imm_se;
+    u32 addr = reg(rs1) + offset;
+    switch (funct3) {
+    case LB:
+      set_reg(rd, u32(i8(memory[addr])));
+      break;
+    case LH:
+      set_reg(rd, u32(i16(load16_(memory, addr))));
+      break;
+    case LW:
+      set_reg(rd, load32_(memory, addr));
+      break;
+    case LBU:
+      set_reg(rd, memory[addr]);
+      break;
+    case LHU:
+      set_reg(rd, load16_(memory, addr));
+      break;
+    default:
+      ABORT("Unhandled funct3");
+    }
     break;
-  default:
-    ABORT("Unhandled SYSTEM");
   }
-  NEXT;
-}
-
-illegal_op: {
-  ABORT("Illegal instruction: instr=0x{:08x}, pc=0x{:08x}", instr, pc - 4);
-}
+  case OP_STORE: {
+    u32 off1 = (instr >> 7) & 0x1f;
+    u32 off2 = instr >> 25;
+    u32 imm = off2 << 5 | off1;
+    u32 offset = u32((i32(imm) << 20) >> 20);
+    u32 addr = reg(rs1) + offset;
+    switch (funct3) {
+    case SB:
+      memory[addr] = u8(reg(rs2));
+      break;
+    case SH:
+      store16_(memory, addr, u16(reg(rs2)));
+      break;
+    case SW:
+      store32_(memory, addr, reg(rs2));
+      break;
+    default:
+      ABORT("Unhandled funct3");
+    }
+    break;
+  }
+  case OP_IMM: {
+    u32 shamt = rs2;
+    switch (funct3) {
+    case ADDI:
+      set_reg(rd, reg(rs1) + imm_se);
+      break;
+    case SLTI:
+      set_reg(rd, i32(reg(rs1)) < i32(imm_se));
+      break;
+    case SLLI:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) << shamt);
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case SLTIU:
+      set_reg(rd, reg(rs1) < imm_se);
+      break;
+    case XORI:
+      set_reg(rd, reg(rs1) ^ imm_se);
+      break;
+    case SRXI:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) >> shamt); // SRLI
+      else if (funct7 == 0b0100000)
+        set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRAI
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case ORI:
+      set_reg(rd, reg(rs1) | imm_se);
+      break;
+    case ANDI:
+      set_reg(rd, reg(rs1) & imm_se);
+      break;
+    default:
+      ABORT("Unhandled funct3");
+    }
+    break;
+  }
+  case OP_REG: {
+    u32 shamt = reg(rs2) & 0x1f;
+    switch (funct3) {
+    case ADD:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) + reg(rs2));
+      else if (funct7 == 0b0000001) // MUL
+        set_reg(rd, reg(rs1) * reg(rs2));
+      else if (funct7 == 0b0100000)
+        set_reg(rd, reg(rs1) - reg(rs2));
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case SLL:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) << shamt);
+      else if (funct7 == 0b0000001) // MULH
+        set_reg(rd, u32((i64(i32(reg(rs1))) * i64(i32(reg(rs2)))) >> 32));
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case SLT:
+      if (funct7 == 0b0000000)
+        set_reg(rd, i32(reg(rs1)) < i32(reg(rs2)));
+      else if (funct7 == 0b0000001) // MULHSU
+        set_reg(rd, u32((i64(i32(reg(rs1))) * i64(u64(reg(rs2)))) >> 32));
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case SLTU:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) < reg(rs2));
+      else if (funct7 == 0b0000001) // MULHU
+        set_reg(rd, u32((u64(reg(rs1)) * u64(reg(rs2))) >> 32));
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case XOR:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) ^ reg(rs2));
+      else if (funct7 == 0b0000001) { // DIV
+        i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
+        if (divisor == 0) {
+          set_reg(rd, 0xffffffff);
+        } else if (dividend == INT32_MIN && divisor == -1) {
+          set_reg(rd, 0x80000000);
+        } else {
+          set_reg(rd, u32(dividend / divisor));
+        }
+      } else
+        ABORT("Unhandled funct7");
+      break;
+    case SRX:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) >> shamt); // SRL
+      else if (funct7 == 0b0000001) {   // DIVU
+        u32 divisor = reg(rs2), dividend = reg(rs1);
+        if (divisor == 0) {
+          set_reg(rd, 0xffffffff);
+        } else {
+          set_reg(rd, dividend / divisor);
+        }
+      } else if (funct7 == 0b0100000)
+        set_reg(rd, u32(i32(reg(rs1)) >> shamt)); // SRA
+      else
+        ABORT("Unhandled funct7");
+      break;
+    case OR:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) | reg(rs2));
+      else if (funct7 == 0b0000001) { // REM
+        i32 divisor = i32(reg(rs2)), dividend = i32(reg(rs1));
+        if (divisor == 0) {
+          set_reg(rd, u32(dividend));
+        } else if (dividend == INT32_MIN && divisor == -1) {
+          set_reg(rd, 0);
+        } else {
+          set_reg(rd, u32(dividend % divisor));
+        }
+      } else
+        ABORT("Unhandled funct7");
+      break;
+    case AND:
+      if (funct7 == 0b0000000)
+        set_reg(rd, reg(rs1) & reg(rs2));
+      else if (funct7 == 0b0000001) { // REMU
+        u32 divisor = reg(rs2), dividend = reg(rs1);
+        if (divisor == 0) {
+          set_reg(rd, dividend);
+        } else {
+          set_reg(rd, dividend % divisor);
+        }
+      } else
+        ABORT("Unhandled funct7");
+      break;
+    default:
+      ABORT("Unhandled funct3");
+    }
+    break;
+  }
+  case OP_FENCE:
+    WARN_PRINT("FENCE not implemented");
+    break;
+  case OP_SYSTEM: {
+    switch (imm_se) {
+    case 0: { // ECALL
+      // DEBUG_PRINT("ECALL {}", reg(17));
+      switch (reg(17)) {
+      case 0: { // _sbrk
+        i32 increment = i32(reg(10));
+        u32 old_ptr = heap_ptr;
+        u32 new_ptr = u32(i32(heap_ptr) + increment);
+        if (new_ptr >= reg(2))
+          ABORT("_sbrk requested a block too big");
+        heap_ptr = new_ptr;
+        set_reg(10, old_ptr);
+        break;
+      }
+      case 1: { // _open
+        u32 start = reg(10);
+        int flags = translate_open_flags(int(reg(11)));
+        u32 mode = reg(12);
+#if defined(_WIN32)
+        flags |= O_BINARY;
+#endif
+        int fd = rv_open(host_char_ptr(memory, start), flags, mode);
+        set_reg(10, u32(fd));
+        break;
+      }
+      case 2: { // _read
+        int fd = int(reg(10));
+        u32 start = reg(11);
+        u32 nbytes = reg(12);
+        long bytes_read = rv_read(fd, &memory[start], nbytes);
+        set_reg(10, u32(bytes_read));
+        break;
+      }
+      case 3: { // _write
+        int fd = int(reg(10));
+        u32 start = reg(11);
+        u32 nbytes = reg(12);
+        long bytes_written = rv_write(fd, &memory[start], nbytes);
+        set_reg(10, u32(bytes_written));
+        break;
+      }
+      case 4: { // _lseek
+        int fd = int(reg(10));
+        off_t start = off_t(i32(reg(11)));
+        int whence = int(reg(12));
+        off_t offset = rv_lseek(fd, start, whence);
+        set_reg(10, u32(offset));
+        break;
+      }
+      case 5: { // _close
+        int fd = int(reg(10));
+        int ret = rv_close(fd);
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 6: { // _gettimeofday
+        using namespace std::chrono;
+        const auto now = system_clock::now();
+        const auto us = duration_cast<microseconds>(now.time_since_epoch());
+        const auto seconds = us.count() / 1000000;
+        const auto useconds = us.count() % 1000000;
+        set_reg(10, u32(seconds));
+        set_reg(11, u32(useconds));
+        set_reg(12, 0);
+        break;
+      }
+      case 7: { // _usleep
+        u32 usec = reg(10);
+        std::this_thread::sleep_for(std::chrono::microseconds(usec));
+        set_reg(10, 0);
+        break;
+      }
+      case 8: { // _render_frame
+        should_render = true;
+        break;
+      }
+      case 9: { // _link
+        u32 oldpath = reg(10);
+        u32 newpath = reg(11);
+#if defined(_WIN32)
+        BOOL res = CreateHardLinkA(host_char_ptr(memory, newpath),
+                                   host_char_ptr(memory, oldpath), nullptr);
+        int ret = (res == TRUE) ? 0 : -1;
+#else
+        int ret = link(host_char_ptr(memory, oldpath),
+                       host_char_ptr(memory, newpath));
+#endif
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 10: { // _unlink
+        u32 path = reg(10);
+        int ret = rv_unlink(host_char_ptr(memory, path));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 11: { // mkdir
+        u32 path = reg(10);
+        u32 mode = reg(11);
+        int ret = rv_mkdir(host_char_ptr(memory, path), mode_t(mode));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 12: { // _rmdir
+        u32 path = reg(10);
+        int ret = rv_rmdir(host_char_ptr(memory, path));
+        set_reg(10, u32(ret));
+        break;
+      }
+      case 15: // _exit
+        ABORT("EXIT");
+        break;
+      default:
+        ABORT("Unknown syscall");
+      }
+      break;
+    }
+    case 1:
+      ABORT("EBREAK");
+      break;
+    default:
+      ABORT("Unhandled SYSTEM");
+    }
+    break;
+  }
+  default:
+    ABORT("Unhandled opcode");
+  }
 }

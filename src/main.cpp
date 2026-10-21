@@ -20,7 +20,7 @@ int main(int argc, const char **argv) {
     ABORT("Failed to initialize SDL");
   }
 
-  if (!SDL_CreateWindowAndRenderer("rvdoom", WINDOW_WIDTH, WINDOW_HEIGHT,
+  if (!SDL_CreateWindowAndRenderer("rvcore", WINDOW_WIDTH, WINDOW_HEIGHT,
                                    SDL_WINDOW_INPUT_FOCUS, &window,
                                    &renderer)) {
     SDL_Quit();
@@ -59,7 +59,7 @@ int main(int argc, const char **argv) {
     }
 
     while (!cpu.should_render) {
-      cpu.execute();
+      cpu.step();
     }
 
     void *pixels = reinterpret_cast<void *>(&memory[VRAM_START]);

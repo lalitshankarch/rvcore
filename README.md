@@ -1,4 +1,4 @@
-# rvcore: A tiny RISC-V emulator that runs DOOM
+# rvcore: A Tiny RISC-V Emulator That Runs DOOM
 
 ![Output](image.png)
 
@@ -7,7 +7,39 @@
 </div>
 <br/>
 
-`rvcore` is a RISC-V emulator that serves as a minimal environment capable of running DOOM. It implements the RV32IM ISA except for the `FENCE` and `EBREAK` instructions, which are currently stubbed.
+`rvcore` is a RISC-V emulator that provides a minimal runtime environment for running DOOM and other bare-metal C/C++ programs. It implements the RV32IM ISA, except for the `FENCE` and `EBREAK` instructions.
+
+## How it works
+
+DOOM runs as a baremetal program, with the syscalls intercepted and emulated by `rvcore`.
+
+DOOM renders directly to a memory-mapped framebuffer and keyboard input is delivered through a small ring buffer shared with the emulator.
+
+```
+0x7FFFFF  +-------------------------------------+
+          |                                     |
+          |        QUEUE_SIZE (32 bytes)        |
+          |                                     |
+0x7FFFDF  +-------------------------------------+ <-- QUEUE_START
+0x7FFFDE  |          QUEUE_READ_IDX             |
+0x7FFFDD  |          QUEUE_WRITE_IDX            |
+          +-------------------------------------+
+          |                                     |
+          |                                     |
+          |       VRAM (1,024,000 bytes)        |
+          |                                     |
+          |                                     |
+0x705FDD  +-------------------------------------+ <-- VRAM_START / STACK_START
+          |                Stack                |
+          |                  |                  |
+          |                  v                  |
+          |                                     |
+          |                  ^                  |
+          |                  |                  |
+          |         Program data + Heap         |
+          |                                     |
+0x000000  +-------------------------------------+
+```
 
 ## Milestones
 
@@ -25,26 +57,11 @@
 
 - [x] Implement the M extension
 
-## Build instructions
+## Building
 
-1. To build, CMake and GCC/Clang is required (for Windows, [MSYS2](https://www.msys2.org/) with `mingw-w64-ucrt-x86_64-toolchain` or [Cygwin](https://www.cygwin.com/) is needed)
-2. Dependencies (SDL3): `libsdl3-dev` / `sdl3-devel` / `sdl3`
-3. Run
+Instructions are provided in [BUILD.md](BUILD.md).
 
-    ```
-        mkdir build
-        cmake -B build -DCMAKE_BUILD_TYPE=Release
-        cd build
-        cmake --build .
-    ```
-
-## Build instructions for doomgeneric
-
-1. Clone https://github.com/lalitshankarch/doomgeneric
-2. `riscv64-unknown-elf-gcc` or the `riscv64-gnu-toolchain` configured with `./configure --with-multilib-generator="rv32im-ilp32--"` must be installed
-3. Navigate to `doomgeneric` and run `make`
-
-## Running other programs
+## Running bare-metal programs
 
 Navigate to the `examples` directory to see how to run simple C programs on `rvcore`. Only a few essential newlib stubs are implemented.
 

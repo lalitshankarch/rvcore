@@ -51,7 +51,6 @@ ExecSeg ExecSeg::get_info(std::ifstream &file) {
 // rvcore expects ELF files with only one PT_LOAD segment at vaddr 0
 ExecSeg ExecSeg::read_into(std::vector<u8> &memory, const char *path) {
   std::ifstream file;
-  file.exceptions(std::ios::failbit | std::ios::badbit);
 
   file.open(path, std::ios::binary);
 
